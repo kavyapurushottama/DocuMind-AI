@@ -1,169 +1,153 @@
-# DocuMind AI
+# 🧠 DocuMind AI
 
-An AI-powered document knowledge assistant. Upload PDFs, DOCX, TXT, or
-Markdown files, ask questions in plain English, and get answers grounded in
-your own documents — with citations (filename, page number, relevance score).
+DocuMind AI is a self-hosted, privacy-first Document Knowledge Retrieval-Augmented Generation (RAG) Workspace. It allows you to upload local document files (PDFs, Word documents, Plain Text, or Markdown) and converse with them in natural language. Get instant, grounded, and concise answers backed by page-level citation highlights and hover previews—completely offline & secure.
 
-This is **V1 (MVP)**: auth, upload, the ingestion pipeline, RAG chat with
-citations, and chat history. Everything runs for free (Groq/Gemini free
-tiers + self-hosted Postgres/Redis/Qdrant in Docker).
+---
 
-## Architecture
+## 🏛️ System Architecture
 
-```
-React + TS + Tailwind  ─────►  FastAPI  ─────►  PostgreSQL  (users, docs, chat history)
-                                   │       ─────►  Qdrant      (embeddings, similarity search)
-                                   │       ─────►  Redis       (stubbed in V1)
-                                   ▼
-                          Gemini Embedding API  (free tier)
-                          Groq or Gemini Flash  (free tier, swappable via env var)
-```
-
-**Ingestion pipeline** (same for every file type):
-`Upload → Extract text (format-specific) → Clean → Chunk (with overlap) → Embed → Store in Qdrant + Postgres`
-
-**Query pipeline**:
-`Question → Embed → Similarity search in Qdrant (filtered by user/document) → Build grounded prompt → LLM → Answer + citations`
-
-## Prerequisites
-
-- Docker + Docker Compose
-- Python 3.11+
-- Node.js 20+
-- A free [Gemini API key](https://aistudio.google.com/apikey) (embeddings, and optionally generation)
-- A free [Groq API key](https://console.groq.com/keys) (generation — fast and free)
-
-## 1. Clone and configure
-
-```bash
-cd docmind-ai
-cp .env.example .env
+```mermaid
+graph TD
+    %% Styling
+    classDef client fill:#eef2ff,stroke:#6366f1,stroke-width:2px;
+    classDef server fill:#f0fdf4,stroke:#22c55e,stroke-width:2px;
+    classDef db fill:#fff7ed,stroke:#f97316,stroke-width:2px;
+    
+    %% Components
+    A[React + TS Frontend]:::client -->|REST API + JWT Auth| B[FastAPI Backend]:::server
+    B -->|User sessions & file metadata| C[(PostgreSQL Database)]:::db
+    
+    %% Ingestion Pipeline
+    B -->|1. File Ingestion| D[Document Extractor]:::server
+    D -->|2. Sliding-Window| E[Chunking Worker]:::server
+    E -->|3. Local Embeddings| F[Ollama Docker]:::server
+    F -->|4. Store Vectors| G[(Qdrant Vector DB)]:::db
+    
+    %% RAG Pipeline
+    B -->|Context Retrieval| G
+    B -->|RAG Grounding| H[LLM: Groq / Gemini]:::server
 ```
 
-Edit `.env` and fill in `GEMINI_API_KEY` and `GROQ_API_KEY`. Everything else
-has a sensible local default.
+---
 
-## 2. Start infrastructure (Postgres, Redis, Qdrant)
+## ✨ Features (Version 1.0 MVP)
 
-```bash
-docker compose up -d
-docker compose ps   # confirm all three are healthy
-```
+*   **Granular Ingestion Pipeline Statuses**: Real-time progress updates during document processing (`Extracting text...` $\rightarrow$ `Generating chunks...` $\rightarrow$ `Vectorizing embeddings...` $\rightarrow$ `Completed`).
+*   **Local & Free Embedding Engine**: Docker-hosted Ollama runs the `nomic-embed-text` model locally to vectorize document chunks at zero cost, ensuring data privacy.
+*   **Interactive Document Previewer**: Click directly on the active document context tag to view the file inside a modal viewer.
+    *   **PDFs, Text, & Markdown**: Natively previewed using in-memory secure blob URL iframes.
+    *   **Word Documents (.docx)**: Client-side parsed and rendered using `docx-preview` to rebuild document styling, tables, and typography.
+*   **Concise Grounded Citations**: Chat responses include clean, deduplicated page pills (e.g. `📄 Ref Page 2`). Hovering over a badge displays the document name, similarity relevance score, and the exact text snippet used for the answer.
+*   **Multi-User & Project Isolation**: JWT-protected authentication separates users, document vector collections, chat threads, and statistics.
+*   **Flexible Chat Scoping**: Chat across all uploaded files, or select a single document dropdown context filter to restrict queries.
 
-This does **not** run the app itself — just the databases. That's intentional,
-so the backend and frontend can hot-reload natively.
+---
 
-## 3. Backend setup
-
-```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-
-pip install -r requirements.txt
-
-# the app reads .env from the backend/ folder — copy the root one in:
-cp ../.env .env
-
-uvicorn app.main:app --reload --port 8000
-```
-
-Verify it's up: open http://localhost:8000/api/health — you should see
-`{"status": "ok", ...}`. Interactive API docs are at http://localhost:8000/docs.
-
-### Verify the pipeline works via curl (before touching the frontend)
-
-```bash
-# 1. Sign up
-curl -X POST http://localhost:8000/api/auth/signup \
-  -H "Content-Type: application/json" \
-  -d '{"email":"you@example.com","password":"testpass123","full_name":"You"}'
-# copy the access_token from the response
-
-# 2. Upload a PDF
-curl -X POST http://localhost:8000/api/documents/upload \
-  -H "Authorization: Bearer <TOKEN>" \
-  -F "file=@/path/to/some.pdf"
-
-# 3. Wait a few seconds for background processing, then check status
-curl http://localhost:8000/api/documents -H "Authorization: Bearer <TOKEN>"
-
-# 4. Ask a question once status is "ready"
-curl -X POST http://localhost:8000/api/chat/ask \
-  -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" \
-  -d '{"question":"What is this document about?"}'
-```
-
-You should get back an answer with a `citations` array pointing to the
-filename, page number, and the chunk text used.
-
-## 4. Frontend setup
-
-```bash
-cd frontend
-cp .env.example .env    # defaults to http://localhost:8000, fine as-is
-npm install
-npm run dev
-```
-
-Open http://localhost:5173 — sign up, upload a document, and chat.
-
-## Project structure
+## 📂 Project Structure
 
 ```
-docmind-ai/
-├── docker-compose.yml       # Postgres, Redis, Qdrant only
-├── .env.example
+DocuMind-AI/
+├── docker-compose.yml       # Database infrastructure (Postgres, Qdrant, Ollama)
+├── .env.example             # Global environment configurations
 ├── backend/
 │   └── app/
-│       ├── api/             # routes_auth, routes_documents, routes_chat
-│       ├── models/          # SQLAlchemy models
-│       ├── schemas/         # Pydantic request/response models
-│       ├── services/
-│       │   ├── extraction/  # pluggable Extractor per file type
-│       │   ├── chunking.py
-│       │   ├── embedding_service.py   # Gemini embeddings
-│       │   ├── vector_store.py        # Qdrant wrapper
-│       │   └── rag_service.py         # retrieval + prompt + LLM call
-│       └── core/             # security (JWT), deps (current user)
+│       ├── api/             # Authentication, documents, and chat routes
+│       ├── models/          # SQLAlchemy database models
+│       ├── schemas/         # Pydantic schema validation models
+│       ├── services/        # Extractor plugins, chunkers, embeddings & RAG
+│       └── main.py          # FastAPI application startup & migrations
 └── frontend/
     └── src/
-        ├── pages/            # Login, Signup, Dashboard, Upload, Chat
-        ├── components/       # DocumentCard, ChatBubble, CitationBadge, FileUploader
-        ├── api/               # typed API client functions
-        └── hooks/useAuth.ts
+        ├── components/       # Chat bubble, file upload, citation badges, and doc viewer
+        ├── pages/            # Dashboard page, login, and registration panels
+        ├── api/               # API axios client modules
+        └── App.tsx            # Routes configurations
 ```
 
-## Adding a new file format later
+---
 
-The ingestion pipeline is built around a pluggable `Extractor` base class
-(`app/services/extraction/base_extractor.py`). To support a new format:
+## ⚡ Quick Start
 
-1. Create `services/extraction/xyz_extractor.py` implementing `extract()`.
-2. Register it in the `EXTRACTORS` dict in `api/routes_documents.py`.
+### Prerequisites
+*   [Docker](https://www.docker.com/) + Docker Compose
+*   [Python 3.11+](https://www.python.org/)
+*   [Node.js 20+](https://nodejs.org/)
 
-Nothing in chunking, embedding, storage, or retrieval needs to change.
+---
 
-## Switching LLM provider
+### Step 1: Environment Setup
+Copy the global `.env` template to a new `.env` file at the project root:
+```bash
+cp .env.example .env
+```
+Fill in your API Keys (e.g. `GROQ_API_KEY` or `GEMINI_API_KEY`). Local database connections work out-of-the-box.
 
-Set `LLM_PROVIDER=groq` or `LLM_PROVIDER=gemini` in `.env` — no code changes
-needed. Both are called from `services/rag_service.py`.
+---
 
-## Troubleshooting
+### Step 2: Launch Database Infrastructure
+Run Docker Compose in the root folder to start Postgres, Qdrant, and Ollama containers in the background:
+```bash
+docker compose up -d
+docker compose ps # Verify all containers are healthy
+```
 
-- **"GEMINI_API_KEY is not set"** — copy your key into `backend/.env` (not
-  just the root `.env`) and restart uvicorn.
-- **Qdrant connection refused** — make sure `docker compose up -d` succeeded
-  and `docker compose ps` shows `qdrant` as healthy.
-- **Upload stuck on "processing"** — check the uvicorn terminal for a
-  traceback; the background task writes the error into the document's
-  `error_message` field, visible in the Upload page.
-- **CORS errors in the browser** — confirm `CORS_ORIGINS` in `backend/.env`
-  includes `http://localhost:5173`.
+---
 
-## What's next (not built yet — confirm V1 works end-to-end first)
+### Step 3: Run Backend Service
+1. Navigate to the backend folder:
+   ```bash
+   cd backend
+   ```
+2. Set up virtual environment and install python dependencies:
+   ```bash
+   python -m venv .venv
+   source .venv/Scripts/activate     # Windows
+   # source .venv/bin/activate       # macOS/Linux
+   pip install -r requirements.txt
+   ```
+3. Copy the `.env` from the project root:
+   ```bash
+   cp ../.env .env
+   ```
+4. Start the FastAPI hot-reload server:
+   ```bash
+   uvicorn app.main:app --reload --port 8000
+   ```
+Verify service is active by navigating to [http://localhost:8000/api/health](http://localhost:8000/api/health).
 
-V2 adds workspaces/folders and multi-doc chat. V3 adds resume parsing and
-career tools. V4 adds GitHub/codebase ingestion. V5 adds enterprise sources
-(Slack, Confluence, websites) and permissions. V6 adds specialized agents.
-V7 adds OAuth, RBAC, streaming, and production ops.
+---
+
+### Step 4: Run Frontend Client
+1. Navigate to the frontend folder:
+   ```bash
+   cd ../frontend
+   ```
+2. Copy the frontend `.env.example`:
+   ```bash
+   cp .env.example .env
+   ```
+3. Install node modules and start Vite local development server:
+   ```bash
+   npm install
+   npm run dev
+   ```
+Open [http://localhost:5173](http://localhost:5173) in your browser!
+
+---
+
+## 🛠️ Extractor Plugin System
+
+DocuMind AI uses a plugin architecture for extraction (`backend/app/services/extraction/base_extractor.py`). To support a new file format:
+1. Write a custom class implementing the `extract` method.
+2. Register the extractor class inside `EXTRACTORS` in [routes_documents.py](file:///d:/Projects/DocuMind%20AI/backend/app/api/routes_documents.py).
+No changes are required for vector indexing, chunking, embeddings, or retrieval logic.
+
+---
+
+## 🚀 Roadmap (Version 2.0 & Beyond)
+
+*   **Workspaces & Folder Management**: Group files into distinct project collections rather than a single flat list.
+*   **Multi-Document Context Selection**: Check/uncheck individual document cards in a list to scope queries dynamically.
+*   **Advanced Semantic Chunking**: Layout-aware parsing to break documents intelligently based on headings, tables, or code boundaries.
+*   **Word-by-word streaming**: Implement Server-Sent Events (SSE) for real-time LLM stream generation.
+*   **Full Offline RAG**: Integrate Llama 3 / Mistral text generation locally via Ollama, removing external API dependencies completely.
