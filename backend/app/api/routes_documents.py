@@ -48,6 +48,7 @@ def process_document(document_id: str) -> None:
             return
 
         doc.status = DocumentStatus.PROCESSING
+        doc.status_detail = "Extracting text contents..."
         db.commit()
 
         extractor = EXTRACTORS[doc.file_type]
@@ -55,18 +56,29 @@ def process_document(document_id: str) -> None:
 
         if not pages:
             doc.status = DocumentStatus.FAILED
+            doc.status_detail = None
             doc.error_message = "No extractable text found in this file."
             db.commit()
             return
 
+        doc.status_detail = "Generating sliding window text chunks..."
+        db.commit()
+
         chunks = chunk_pages(pages)
         if not chunks:
             doc.status = DocumentStatus.FAILED
+            doc.status_detail = None
             doc.error_message = "Text was extracted but no chunks could be built."
             db.commit()
             return
 
+        doc.status_detail = f"Vectorizing {len(chunks)} text chunks..."
+        db.commit()
+
         vectors = embedding_service.embed_texts([c.text for c in chunks])
+
+        doc.status_detail = "Storing vector index in Qdrant store..."
+        db.commit()
 
         vector_store.upsert_chunks(
             document_id=str(doc.id),
@@ -81,12 +93,14 @@ def process_document(document_id: str) -> None:
         doc.page_count = len(pages)
         doc.chunk_count = len(chunks)
         doc.status = DocumentStatus.READY
+        doc.status_detail = None
         db.commit()
     except Exception as e:  # noqa: BLE001 - surface any failure back to the user
         db.rollback()
         doc = db.query(Document).filter(Document.id == uuid.UUID(document_id)).first()
         if doc:
             doc.status = DocumentStatus.FAILED
+            doc.status_detail = None
             doc.error_message = str(e)[:500]
             db.commit()
     finally:
@@ -182,3 +196,25 @@ def delete_document(document_id: uuid.UUID, db: Session = Depends(get_db), curre
         os.remove(doc.file_path)
     db.delete(doc)
     db.commit()
+
+
+@router.get("/{document_id}/download")
+def download_document(document_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    import mimetypes
+    from fastapi.responses import FileResponse
+    doc = db.query(Document).filter(Document.id == document_id, Document.user_id == current_user.id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not os.path.exists(doc.file_path):
+        raise HTTPException(status_code=404, detail="File on disk not found")
+    
+    media_type, _ = mimetypes.guess_type(doc.filename)
+    if not media_type:
+        media_type = "application/octet-stream"
+        
+    return FileResponse(
+        path=doc.file_path,
+        filename=doc.filename,
+        media_type=media_type,
+        content_disposition_type="inline"
+    )

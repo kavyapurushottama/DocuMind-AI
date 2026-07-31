@@ -23,3 +23,12 @@ export async function getConversation(id: string): Promise<Conversation> {
   const { data } = await apiClient.get(`/api/chat/conversations/${id}`);
   return data;
 }
+
+export async function deleteConversation(id: string): Promise<void> {
+  await apiClient.delete(`/api/chat/conversations/${id}`);
+}
+
+export async function pinConversation(id: string): Promise<{ is_pinned: boolean }> {
+  const { data } = await apiClient.post(`/api/chat/conversations/${id}/pin`);
+  return data;
+}

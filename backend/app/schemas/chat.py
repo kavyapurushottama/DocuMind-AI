@@ -41,6 +41,7 @@ class ConversationResponse(BaseModel):
     id: uuid.UUID
     title: str
     document_id: uuid.UUID | None
+    is_pinned: bool
     created_at: datetime
     messages: list[MessageResponse] = []
 
@@ -52,6 +53,7 @@ class ConversationSummary(BaseModel):
     id: uuid.UUID
     title: str
     document_id: uuid.UUID | None
+    is_pinned: bool
     created_at: datetime
 
     class Config:

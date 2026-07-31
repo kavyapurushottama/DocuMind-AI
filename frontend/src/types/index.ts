@@ -12,6 +12,7 @@ export interface DocumentItem {
   file_type: string;
   file_size_bytes: number;
   status: DocumentStatus;
+  status_detail: string | null;
   error_message: string | null;
   page_count: number | null;
   chunk_count: number;

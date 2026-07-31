@@ -2,6 +2,82 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Google Fonts already loaded via index.html ─── */
+
+/* ─── Base resets ─── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
 body {
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: 'Inter', sans-serif;
+  background-color: #F8F9FC;
+  color: #0F1117;
 }
+
+/* ─── Selection ─── */
+::selection {
+  background-color: rgba(91, 111, 255, 0.18);
+  color: #0F1117;
+}
+
+/* ─── Custom scrollbar ─── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(91, 111, 255, 0.25);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(91, 111, 255, 0.45); }
+
+/* ─── Glass utility ─── */
+.glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.glass-dark {
+  background: rgba(15, 17, 23, 0.65);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ─── Gradient text ─── */
+.gradient-text {
+  background: linear-gradient(135deg, #5B6FFF 0%, #8B5CF6 50%, #A855F7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Skeleton shimmer ─── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #E5E7EB 0%,
+    #F3F4F6 50%,
+    #E5E7EB 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s linear infinite;
+  border-radius: 0.5rem;
+}
+
+/* ─── Dot bounce for thinking indicator ─── */
+.dot-1 { animation: dot-bounce 1.2s infinite ease-in-out 0s; }
+.dot-2 { animation: dot-bounce 1.2s infinite ease-in-out 0.2s; }
+.dot-3 { animation: dot-bounce 1.2s infinite ease-in-out 0.4s; }
+
+/* ─── Focus ring override ─── */
+input:focus, textarea:focus, select:focus, button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(91, 111, 255, 0.25);
+}
+
+/* ─── Transition defaults ─── */
+a, button { transition-property: color, background-color, border-color, box-shadow, opacity, transform; transition-duration: 150ms; transition-timing-function: ease; }

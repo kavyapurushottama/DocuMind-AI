@@ -17,3 +17,6 @@ frontend/dist/
 *.log
 .vscode/
 .idea/
+.env
+.venv/
+.agents/

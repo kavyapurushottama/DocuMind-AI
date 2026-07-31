@@ -14,8 +14,15 @@ SYSTEM_PROMPT = (
     "question using ONLY the context below, which was retrieved from their "
     "own uploaded documents. If the answer is not contained in the context, "
     "say exactly: \"I couldn't find that in your documents.\" Do not use "
-    "outside knowledge. Do not make anything up. When you use a fact from "
-    "the context, keep your answer concise and directly grounded in it."
+    "outside knowledge. Keep your answer highly concise, direct, and limited "
+    "to 2-4 sentences max. Do not make anything up."
+)
+
+NO_DOCS_SYSTEM_PROMPT = (
+    "You are DocuMind AI, a document knowledge assistant. The user has not uploaded any documents yet. "
+    "Answer their question using your general knowledge. Keep your response short and concise (under 3 sentences). "
+    "End with a brief, friendly one-sentence recommendation to upload documents (PDF, DOCX, TXT, MD) on the Upload page "
+    "for a detailed analysis with citations."
 )
 
 
@@ -27,7 +34,7 @@ def _build_context_block(chunks: list[dict]) -> str:
     return "\n\n".join(parts)
 
 
-def _call_groq(user_prompt: str) -> str:
+def _call_groq(user_prompt: str, system_prompt: str = SYSTEM_PROMPT) -> str:
     from groq import Groq
 
     if not settings.GROQ_API_KEY:
@@ -38,7 +45,7 @@ def _call_groq(user_prompt: str) -> str:
     resp = client.chat.completions.create(
         model=settings.GROQ_MODEL,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
         temperature=0.2,
@@ -46,7 +53,7 @@ def _call_groq(user_prompt: str) -> str:
     return resp.choices[0].message.content
 
 
-def _call_gemini(user_prompt: str) -> str:
+def _call_gemini(user_prompt: str, system_prompt: str = SYSTEM_PROMPT) -> str:
     from google import genai
     from google.genai import types
 
@@ -58,20 +65,33 @@ def _call_gemini(user_prompt: str) -> str:
     resp = client.models.generate_content(
         model=settings.GEMINI_MODEL,
         contents=user_prompt,
-        config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT, temperature=0.2),
+        config=types.GenerateContentConfig(system_instruction=system_prompt, temperature=0.2),
     )
     return resp.text
 
 
-def generate_answer(question: str, context: str) -> str:
-    user_prompt = f"Context from your documents:\n\n{context}\n\nQuestion: {question}"
+def generate_answer(question: str, context: str, system_prompt: str = SYSTEM_PROMPT) -> str:
+    if context:
+        user_prompt = f"Context from your documents:\n\n{context}\n\nQuestion: {question}"
+    else:
+        user_prompt = question
+
     if settings.LLM_PROVIDER == "gemini":
-        return _call_gemini(user_prompt)
-    return _call_groq(user_prompt)
+        return _call_gemini(user_prompt, system_prompt)
+    return _call_groq(user_prompt, system_prompt)
 
 
-def answer_question(question: str, user_id: str, document_id: str | None = None) -> tuple[str, list[Citation]]:
+def answer_question(
+    question: str,
+    user_id: str,
+    document_id: str | None = None,
+    has_documents: bool = True,
+) -> tuple[str, list[Citation]]:
     """Full query flow: embed -> retrieve -> ground -> generate -> cite."""
+    if not has_documents:
+        answer = generate_answer(question, context="", system_prompt=NO_DOCS_SYSTEM_PROMPT)
+        return answer, []
+
     query_vector = embedding_service.embed_query(question)
     chunks = vector_store.search(query_vector, user_id=user_id, document_id=document_id, top_k=TOP_K)
 

@@ -28,6 +28,7 @@ class Document(Base):
     file_size_bytes = Column(Integer, default=0)
 
     status = Column(Enum(DocumentStatus), default=DocumentStatus.PENDING, nullable=False)
+    status_detail = Column(String, nullable=True)
     error_message = Column(String, nullable=True)
 
     page_count = Column(Integer, nullable=True)

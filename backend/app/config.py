@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     GEMINI_EMBEDDING_MODEL: str = "text-embedding-004"
     EMBEDDING_DIM: int = 768
 
+    EMBEDDING_PROVIDER: str = "gemini"  # "gemini" or "ollama"
+    OLLAMA_URL: str = "http://localhost:11434"
+    OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
+
     # --- Uploads ---
     MAX_UPLOAD_MB: int = 25
     UPLOAD_DIR: str = "./uploads"

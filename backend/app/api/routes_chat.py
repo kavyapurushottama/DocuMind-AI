@@ -1,12 +1,12 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
 from app.database import get_db
 from app.models.chat import Conversation, Message, MessageRole
-from app.models.document import Document
+from app.models.document import Document, DocumentStatus
 from app.models.user import User
 from app.schemas.chat import AskRequest, AskResponse, ConversationResponse, ConversationSummary, MessageResponse
 from app.services.rag_service import answer_question
@@ -40,10 +40,18 @@ def ask(data: AskRequest, db: Session = Depends(get_db), current_user: User = De
     db.add(user_message)
     db.commit()
 
+    has_docs = (
+        db.query(Document)
+        .filter(Document.user_id == current_user.id, Document.status == DocumentStatus.READY)
+        .count()
+        > 0
+    )
+
     answer_text, citations = answer_question(
         question=data.question,
         user_id=str(current_user.id),
         document_id=str(data.document_id) if data.document_id else None,
+        has_documents=has_docs,
     )
 
     assistant_message = Message(
@@ -64,7 +72,7 @@ def list_conversations(db: Session = Depends(get_db), current_user: User = Depen
     return (
         db.query(Conversation)
         .filter(Conversation.user_id == current_user.id)
-        .order_by(Conversation.created_at.desc())
+        .order_by(Conversation.is_pinned.desc(), Conversation.created_at.desc())
         .all()
     )
 
@@ -79,3 +87,31 @@ def get_conversation(conversation_id: uuid.UUID, db: Session = Depends(get_db), 
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return conversation
+
+
+@router.delete("/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_conversation(conversation_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    conversation = (
+        db.query(Conversation)
+        .filter(Conversation.id == conversation_id, Conversation.user_id == current_user.id)
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    db.delete(conversation)
+    db.commit()
+
+
+@router.post("/conversations/{conversation_id}/pin")
+def pin_conversation(conversation_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    conversation = (
+        db.query(Conversation)
+        .filter(Conversation.id == conversation_id, Conversation.user_id == current_user.id)
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    conversation.is_pinned = not conversation.is_pinned
+    db.commit()
+    db.refresh(conversation)
+    return {"is_pinned": conversation.is_pinned}

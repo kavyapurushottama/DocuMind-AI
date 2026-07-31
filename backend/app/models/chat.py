@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text, JSON, Enum
+from sqlalchemy import Column, String, DateTime, ForeignKey, Text, JSON, Enum, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import enum
@@ -22,9 +22,10 @@ class Conversation(Base):
     # nullable: null means "chat across all documents"
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True)
     title = Column(String, default="New chat")
+    is_pinned = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-    messages = relationship("Message", back_populates="conversation", order_by="Message.created_at")
+    messages = relationship("Message", back_populates="conversation", order_by="Message.created_at", cascade="all, delete-orphan")
 
 
 class Message(Base):
