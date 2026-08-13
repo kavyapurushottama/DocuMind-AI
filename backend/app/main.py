@@ -13,6 +13,28 @@ Base.metadata.create_all(bind=engine)
 with engine.connect() as connection:
     connection.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE NOT NULL;"))
     connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS status_detail VARCHAR;"))
+    
+    # Workspaces DDL
+    connection.execute(text("""
+        CREATE TABLE IF NOT EXISTS workspaces (
+            id UUID PRIMARY KEY,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name VARCHAR NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+    """))
+    connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE SET NULL;"))
+    connection.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE SET NULL;"))
+    
+    # Document Metadata Fields DDL
+    connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS author VARCHAR;"))
+    connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS created_date TIMESTAMP WITH TIME ZONE;"))
+    connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS modified_date TIMESTAMP WITH TIME ZONE;"))
+    connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS tags VARCHAR;"))
+    connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS language VARCHAR;"))
+    connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS department VARCHAR;"))
+    connection.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS document_type VARCHAR;"))
+    
     connection.commit()
 
 app = FastAPI(title="DocuMind AI", version="1.0.0")

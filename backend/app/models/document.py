@@ -31,9 +31,19 @@ class Document(Base):
     status_detail = Column(String, nullable=True)
     error_message = Column(String, nullable=True)
 
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True)
+    author = Column(String, nullable=True)
+    created_date = Column(DateTime(timezone=True), nullable=True)
+    modified_date = Column(DateTime(timezone=True), nullable=True)
+    tags = Column(String, nullable=True)  # Store tags as a JSON array string or comma-separated list
+    language = Column(String, nullable=True)
+    department = Column(String, nullable=True)
+    document_type = Column(String, nullable=True)
+
     page_count = Column(Integer, nullable=True)
     chunk_count = Column(Integer, default=0)
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User")
+    workspace = relationship("Workspace")

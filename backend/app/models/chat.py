@@ -21,11 +21,13 @@ class Conversation(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     # nullable: null means "chat across all documents"
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True)
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True)
     title = Column(String, default="New chat")
     is_pinned = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     messages = relationship("Message", back_populates="conversation", order_by="Message.created_at", cascade="all, delete-orphan")
+    workspace = relationship("Workspace")
 
 
 class Message(Base):

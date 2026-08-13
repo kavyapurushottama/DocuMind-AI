@@ -48,6 +48,7 @@ export interface ConversationSummary {
   id: string;
   title: string;
   document_id: string | null;
+  is_pinned?: boolean;
   created_at: string;
 }
 

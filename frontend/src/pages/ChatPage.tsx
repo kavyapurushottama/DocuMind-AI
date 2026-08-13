@@ -131,7 +131,8 @@ function DocumentViewerModal({ isOpen, onClose, activeDoc }: DocumentViewerModal
       apiClient.get(`/api/documents/${activeDoc.id}/download`, { responseType: 'blob' })
         .then(response => {
           const fileExt = activeDoc.filename.toLowerCase().split('.').pop() || '';
-          const blob = new Blob([response.data], { type: response.headers['content-type'] });
+          const contentType = response.headers['content-type'] ? String(response.headers['content-type']) : undefined;
+          const blob = new Blob([response.data], { type: contentType });
           
           if (fileExt === 'docx') {
             setDocxBlob(blob);
@@ -529,7 +530,7 @@ export default function ChatPage() {
       <DocumentViewerModal
         isOpen={viewerOpen}
         onClose={() => setViewerOpen(false)}
-        activeDoc={activeDoc}
+        activeDoc={activeDoc ?? null}
       />
     </div>
   );
