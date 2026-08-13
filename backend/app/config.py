@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://docmind:localdevpass@localhost:5432/docmind"
     REDIS_URL: str = "redis://localhost:6379"
     QDRANT_URL: str = "http://localhost:6333"
+    QDRANT_API_KEY: str = ""
     QDRANT_COLLECTION: str = "docmind_chunks"
 
     # --- Auth ---
