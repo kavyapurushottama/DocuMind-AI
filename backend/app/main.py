@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from sqlalchemy import text
+import app.models  # Ensures all ORM models are registered in Base.metadata
 from app.api import routes_auth, routes_documents, routes_chat
 from app.config import settings
 from app.database import Base, engine
