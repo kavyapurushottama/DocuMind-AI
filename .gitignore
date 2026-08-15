@@ -21,3 +21,8 @@ frontend/dist/
 .venv/
 .agents/
 *.tsbuildinfo
+qdrant_data/
+test_qdrant_db/
+backend/qdrant_data/
+backend/test_qdrant_db/
+
