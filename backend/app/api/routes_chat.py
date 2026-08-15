@@ -47,18 +47,22 @@ def ask(data: AskRequest, db: Session = Depends(get_db), current_user: User = De
         > 0
     )
 
-    answer_text, citations = answer_question(
-        question=data.question,
-        user_id=str(current_user.id),
-        document_id=str(data.document_id) if data.document_id else None,
-        has_documents=has_docs,
-    )
+    try:
+        answer_text, citations = answer_question(
+            question=data.question,
+            user_id=str(current_user.id),
+            document_id=str(data.document_id) if data.document_id else None,
+            has_documents=has_docs,
+        )
+    except Exception as e:
+        answer_text = f"An error occurred while processing your request: {e}"
+        citations = []
 
     assistant_message = Message(
         conversation_id=conversation.id,
         role=MessageRole.ASSISTANT,
         content=answer_text,
-        citations=[c.model_dump() for c in citations],
+        citations=[c.model_dump() for c in citations] if citations else [],
     )
     db.add(assistant_message)
     db.commit()

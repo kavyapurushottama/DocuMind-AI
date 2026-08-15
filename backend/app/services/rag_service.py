@@ -3,9 +3,12 @@ Query-time RAG: embed the question, retrieve top-k chunks from Qdrant,
 build a grounded prompt, call the configured LLM (Groq or Gemini — swap
 via LLM_PROVIDER env var), and return the answer plus citations.
 """
+import logging
 from app.config import settings
 from app.services import embedding_service, vector_store
 from app.schemas.chat import Citation
+
+logger = logging.getLogger(__name__)
 
 TOP_K = 5
 
@@ -76,9 +79,25 @@ def generate_answer(question: str, context: str, system_prompt: str = SYSTEM_PRO
     else:
         user_prompt = question
 
-    if settings.LLM_PROVIDER == "gemini":
-        return _call_gemini(user_prompt, system_prompt)
-    return _call_groq(user_prompt, system_prompt)
+    # Try Groq API first if key exists
+    if settings.GROQ_API_KEY:
+        try:
+            return _call_groq(user_prompt, system_prompt)
+        except Exception as e:
+            logger.warning(f"Groq LLM call failed ({e}). Trying Gemini fallback...")
+
+    # Try Gemini API fallback
+    if settings.GEMINI_API_KEY:
+        try:
+            return _call_gemini(user_prompt, system_prompt)
+        except Exception as e:
+            logger.warning(f"Gemini LLM call failed ({e})...")
+
+    # Safe fallback if API keys are missing/rate-limited
+    if context:
+        return f"Based on your document context:\n\n{context[:600]}\n\n(Tip: Add a free GROQ_API_KEY to your backend environment for full conversational AI responses.)"
+
+    return "Hello! I am DocuMind AI. Please upload a document or set your GROQ_API_KEY in Render to enable general conversational AI responses."
 
 
 def answer_question(

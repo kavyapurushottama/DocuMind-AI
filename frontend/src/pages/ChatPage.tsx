@@ -313,9 +313,25 @@ export default function ChatPage() {
       setMessages((prev) => [...prev, data.message]);
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      if (!convIdParam) {
-        setSearchParams((p) => { p.set("conversationId", data.conversation_id); return p; });
+      if (convIdParam !== data.conversation_id) {
+        setSearchParams((p) => {
+          const next = new URLSearchParams(p);
+          next.set("conversationId", data.conversation_id);
+          if (documentId) next.set("documentId", documentId);
+          return next;
+        });
       }
+    },
+    onError: (err: any) => {
+      const errorMsg: ChatMessage = {
+        id: `err-${Date.now()}`,
+        role: "assistant",
+        content: err?.response?.data?.detail || "Could not reach the AI response service. Please check your backend connection.",
+        citations: null,
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
     },
   });
 
