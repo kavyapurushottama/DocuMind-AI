@@ -154,8 +154,30 @@ async def upload_document(
     return doc
 
 
+def _auto_cleanup_stuck_documents(db: Session, user_id: uuid.UUID) -> None:
+    """Auto-recovers any document frozen in processing state from an old server build/deploy."""
+    from datetime import datetime, timezone, timedelta
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=3)
+    stuck_docs = (
+        db.query(Document)
+        .filter(
+            Document.user_id == user_id,
+            Document.status.in_([DocumentStatus.PROCESSING, DocumentStatus.PENDING]),
+            Document.created_at < cutoff,
+        )
+        .all()
+    )
+    if stuck_docs:
+        for doc in stuck_docs:
+            doc.status = DocumentStatus.FAILED
+            doc.status_detail = None
+            doc.error_message = "Ingestion timed out on previous server build. Please delete and re-upload."
+        db.commit()
+
+
 @router.get("", response_model=list[DocumentResponse])
 def list_documents(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _auto_cleanup_stuck_documents(db, current_user.id)
     return (
         db.query(Document)
         .filter(Document.user_id == current_user.id)
@@ -166,6 +188,7 @@ def list_documents(db: Session = Depends(get_db), current_user: User = Depends(g
 
 @router.get("/dashboard/stats", response_model=DashboardStats)
 def dashboard_stats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _auto_cleanup_stuck_documents(db, current_user.id)
     docs = db.query(Document).filter(Document.user_id == current_user.id).order_by(Document.created_at.desc()).all()
     total_chats = db.query(Conversation).filter(Conversation.user_id == current_user.id).count()
     storage_used = sum(d.file_size_bytes for d in docs)
@@ -187,13 +210,23 @@ def get_document(document_id: uuid.UUID, db: Session = Depends(get_db), current_
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(document_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    import logging
+    logger = logging.getLogger(__name__)
     doc = db.query(Document).filter(Document.id == document_id, Document.user_id == current_user.id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    vector_store.delete_document_chunks(str(doc.id))
-    if os.path.exists(doc.file_path):
-        os.remove(doc.file_path)
+    try:
+        vector_store.delete_document_chunks(str(doc.id))
+    except Exception as e:
+        logger.warning(f"Failed to delete Qdrant chunks for document {document_id}: {e}")
+
+    if doc.file_path and os.path.exists(doc.file_path):
+        try:
+            os.remove(doc.file_path)
+        except Exception as e:
+            logger.warning(f"Failed to remove file from disk: {e}")
+
     db.delete(doc)
     db.commit()
 

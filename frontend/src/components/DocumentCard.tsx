@@ -85,8 +85,8 @@ export default function DocumentCard({
         )}
       </div>
 
-      {/* Actions — always visible on ready, revealed on hover otherwise */}
-      <div className={`flex shrink-0 items-center gap-1.5 transition-opacity duration-150 ${doc.status === "ready" ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+      {/* Actions — always visible */}
+      <div className="flex shrink-0 items-center gap-1.5">
         {doc.status === "ready" && (
           <Link
             to={`/chat?documentId=${doc.id}`}
@@ -101,9 +101,17 @@ export default function DocumentCard({
         )}
         {onDelete && (
           <button
-            onClick={() => onDelete(doc.id)}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (confirm(`Are you sure you want to delete "${doc.filename}"?`)) {
+                onDelete(doc.id);
+              }
+            }}
             id={`doc-delete-${doc.id}`}
-            className="flex items-center justify-center rounded-xl p-1.5 text-t4 transition hover:bg-red-50 hover:text-danger"
+            className="flex items-center justify-center rounded-xl p-2 text-t3 transition hover:bg-red-50 hover:text-danger hover:scale-105"
+            title="Delete document"
             aria-label="Delete document"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
