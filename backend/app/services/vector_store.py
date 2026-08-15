@@ -19,16 +19,17 @@ def get_client() -> QdrantClient:
     if _client is None:
         api_key = settings.QDRANT_API_KEY if settings.QDRANT_API_KEY else None
         _client = QdrantClient(url=settings.QDRANT_URL, api_key=api_key)
-        _ensure_collection(_client)
+        ensure_collection(settings.EMBEDDING_DIM)
     return _client
 
 
-def _ensure_collection(client: QdrantClient) -> None:
+def ensure_collection(vector_size: int = 768) -> None:
+    client = get_client()
     collections = [c.name for c in client.get_collections().collections]
     if settings.QDRANT_COLLECTION not in collections:
         client.create_collection(
             collection_name=settings.QDRANT_COLLECTION,
-            vectors_config=qmodels.VectorParams(size=settings.EMBEDDING_DIM, distance=qmodels.Distance.COSINE),
+            vectors_config=qmodels.VectorParams(size=vector_size, distance=qmodels.Distance.COSINE),
         )
 
 
@@ -41,6 +42,9 @@ def upsert_chunks(
     chunk_indices: list[int],
     vectors: list[list[float]],
 ) -> None:
+    if not vectors:
+        return
+    ensure_collection(vector_size=len(vectors[0]))
     client = get_client()
     points = []
     for text, page, idx, vector in zip(chunk_texts, chunk_pages, chunk_indices, vectors):
