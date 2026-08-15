@@ -72,7 +72,11 @@ export default function SignupPage() {
     try {
       await doSignup(email, password, fullName);
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Could not create account");
+      if (!err?.response) {
+        setError("Unable to connect to backend server. Please verify your API deployment and VITE_API_URL.");
+      } else {
+        setError(err?.response?.data?.detail || "Could not create account");
+      }
     } finally {
       setLoading(false);
     }

@@ -71,7 +71,11 @@ export default function LoginPage() {
     try {
       await doLogin(email, password);
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Incorrect email or password");
+      if (!err?.response) {
+        setError("Unable to connect to backend server. Please verify your API deployment and VITE_API_URL.");
+      } else {
+        setError(err?.response?.data?.detail || "Incorrect email or password");
+      }
     } finally {
       setLoading(false);
     }
