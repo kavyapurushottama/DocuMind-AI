@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     GEMINI_EMBEDDING_MODEL: str = "text-embedding-004"
     EMBEDDING_DIM: int = 768
 
-    EMBEDDING_PROVIDER: str = "gemini"  # "gemini" or "ollama"
+    EMBEDDING_PROVIDER: str = "fastembed"  # "fastembed", "gemini", or "ollama"
     OLLAMA_URL: str = "http://localhost:11434"
     OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
 
