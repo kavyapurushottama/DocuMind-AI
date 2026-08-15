@@ -38,7 +38,19 @@ with engine.connect() as connection:
     
     connection.commit()
 
-app = FastAPI(title="DocuMind AI", version="1.0.0")
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Pre-load Fastembed model during application startup
+    try:
+        from app.services.embedding_service import _get_fastembed
+        _get_fastembed()
+    except Exception as e:
+        print(f"Fastembed pre-load notice: {e}")
+    yield
+
+app = FastAPI(title="DocuMind AI", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

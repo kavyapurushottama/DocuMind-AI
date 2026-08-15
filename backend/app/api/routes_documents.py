@@ -149,7 +149,9 @@ async def upload_document(
     db.commit()
     db.refresh(doc)
 
-    background_tasks.add_task(process_document, str(doc.id))
+    # Ingest document immediately during active request so Render allocates 100% CPU
+    process_document(str(doc.id))
+    db.refresh(doc)
 
     return doc
 
