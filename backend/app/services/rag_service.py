@@ -13,19 +13,17 @@ logger = logging.getLogger(__name__)
 TOP_K = 5
 
 SYSTEM_PROMPT = (
-    "You are DocuMind AI, a document knowledge assistant. Answer the user's "
-    "question using ONLY the context below, which was retrieved from their "
-    "own uploaded documents. If the answer is not contained in the context, "
-    "say exactly: \"I couldn't find that in your documents.\" Do not use "
-    "outside knowledge. Keep your answer highly concise, direct, and limited "
-    "to 2-4 sentences max. Do not make anything up."
+    "You are DocuMind AI, an intelligent document knowledge assistant. "
+    "Answer the user's question accurately using the document context below. "
+    "If the user asks for a summary, key points, or an explanation of the document, provide a clear, structured, and insightful response based on the context. "
+    "If the question is about a specific detail not mentioned in the context, politely state that the specific detail was not found in the documents."
 )
 
 NO_DOCS_SYSTEM_PROMPT = (
-    "You are DocuMind AI, a document knowledge assistant. The user has not uploaded any documents yet. "
-    "Answer their question using your general knowledge. Keep your response short and concise (under 3 sentences). "
-    "End with a brief, friendly one-sentence recommendation to upload documents (PDF, DOCX, TXT, MD) on the Upload page "
-    "for a detailed analysis with citations."
+    "You are DocuMind AI, an intelligent document knowledge assistant. "
+    "Answer the user's question clearly, accurately, and helpfully using your general knowledge. "
+    "Provide well-structured responses. If relevant, mention that they can upload PDF, DOCX, TXT, or MD documents "
+    "on the Upload page for document-grounded analysis and page citations."
 )
 
 
@@ -119,10 +117,11 @@ def answer_question(
         chunks = vector_store.search(query_vector, user_id=user_id, document_id=None, top_k=TOP_K)
 
     if not chunks:
-        return "I couldn't find that in your documents.", []
+        answer = generate_answer(question, context="", system_prompt=NO_DOCS_SYSTEM_PROMPT)
+        return answer, []
 
     context = _build_context_block(chunks)
-    answer = generate_answer(question, context)
+    answer = generate_answer(question, context, system_prompt=SYSTEM_PROMPT)
 
     citations = [
         Citation(
