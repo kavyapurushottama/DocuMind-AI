@@ -114,6 +114,10 @@ def answer_question(
     query_vector = embedding_service.embed_query(question)
     chunks = vector_store.search(query_vector, user_id=user_id, document_id=document_id, top_k=TOP_K)
 
+    if not chunks and document_id:
+        logger.info("Specific document filter returned no chunks. Retrying across all user documents...")
+        chunks = vector_store.search(query_vector, user_id=user_id, document_id=None, top_k=TOP_K)
+
     if not chunks:
         return "I couldn't find that in your documents.", []
 

@@ -105,6 +105,7 @@ def search(
     if document_id:
         must_filters.append(qmodels.FieldCondition(key="document_id", match=qmodels.MatchValue(value=document_id)))
 
+    results = []
     try:
         results = client.query_points(
             collection_name=settings.QDRANT_COLLECTION,
@@ -115,15 +116,21 @@ def search(
         ).points
     except Exception as e:
         logger.warning(f"Search on primary Qdrant failed ({e}). Searching embedded local Qdrant...")
-        client = get_client(force_local=True)
-        ensure_collection(vector_size=len(query_vector))
-        results = client.query_points(
-            collection_name=settings.QDRANT_COLLECTION,
-            query=query_vector,
-            query_filter=qmodels.Filter(must=must_filters),
-            limit=top_k,
-            with_payload=True,
-        ).points
+
+    if not results:
+        try:
+            local_client = QdrantClient(path="./qdrant_data")
+            collections = [c.name for c in local_client.get_collections().collections]
+            if settings.QDRANT_COLLECTION in collections:
+                results = local_client.query_points(
+                    collection_name=settings.QDRANT_COLLECTION,
+                    query=query_vector,
+                    query_filter=qmodels.Filter(must=must_filters),
+                    limit=top_k,
+                    with_payload=True,
+                ).points
+        except Exception as e:
+            logger.warning(f"Embedded local Qdrant search check error: {e}")
 
     return [
         {
