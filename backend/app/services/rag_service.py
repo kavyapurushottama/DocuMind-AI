@@ -4,6 +4,10 @@ build a grounded prompt, call the configured LLM (Groq or Gemini — swap
 via LLM_PROVIDER env var), and return the answer plus citations.
 """
 import logging
+from groq import Groq
+from google import genai
+from google.genai import types
+
 from app.config import settings
 from app.services import embedding_service, vector_store
 from app.schemas.chat import Citation
@@ -36,8 +40,6 @@ def _build_context_block(chunks: list[dict]) -> str:
 
 
 def _call_groq(user_prompt: str, system_prompt: str = SYSTEM_PROMPT) -> str:
-    from groq import Groq
-
     if not settings.GROQ_API_KEY:
         raise RuntimeError(
             "GROQ_API_KEY is not set. Get a free key at https://console.groq.com/keys"
@@ -55,9 +57,6 @@ def _call_groq(user_prompt: str, system_prompt: str = SYSTEM_PROMPT) -> str:
 
 
 def _call_gemini(user_prompt: str, system_prompt: str = SYSTEM_PROMPT) -> str:
-    from google import genai
-    from google.genai import types
-
     if not settings.GEMINI_API_KEY:
         raise RuntimeError(
             "GEMINI_API_KEY is not set. Get a free key at https://aistudio.google.com/apikey"
