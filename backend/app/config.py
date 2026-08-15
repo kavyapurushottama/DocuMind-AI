@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
     GEMINI_MODEL: str = "gemini-2.0-flash"
     GEMINI_EMBEDDING_MODEL: str = "text-embedding-004"
-    EMBEDDING_DIM: int = 768
+    EMBEDDING_DIM: int = 384
 
     EMBEDDING_PROVIDER: str = "fastembed"  # "fastembed", "gemini", or "ollama"
     OLLAMA_URL: str = "http://localhost:11434"
@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./uploads"
 
     # --- CORS ---
-    CORS_ORIGINS: str = "http://localhost:5173"
+    CORS_ORIGINS: str = "http://localhost:5173,https://documind-ai-six-nu.vercel.app,*"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
