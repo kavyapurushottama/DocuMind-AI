@@ -65,6 +65,11 @@ app.include_router(routes_documents.router)
 app.include_router(routes_chat.router)
 
 
+@app.get("/")
+def root():
+    return {"status": "ok", "service": "docmind-ai-backend", "message": "DocuMind AI Backend is live!"}
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok", "service": "docmind-ai-backend"}
