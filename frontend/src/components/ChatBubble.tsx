@@ -11,6 +11,49 @@ function timeAgo(iso: string) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+function FormattedText({ text }: { text: string }) {
+  const lines = text.split("\n");
+  return (
+    <div className="space-y-1.5 leading-relaxed">
+      {lines.map((line, idx) => {
+        if (!line.trim()) return <div key={idx} className="h-1" />;
+
+        const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`)/g;
+        const matches = [...line.matchAll(regex)];
+
+        if (matches.length === 0) {
+          return <p key={idx}>{line}</p>;
+        }
+
+        const parts = [];
+        let lastIndex = 0;
+        let key = 0;
+
+        for (const match of matches) {
+          const matchIndex = match.index!;
+          if (matchIndex > lastIndex) {
+            parts.push(line.slice(lastIndex, matchIndex));
+          }
+          const raw = match[0];
+          if (raw.startsWith("**") && raw.endsWith("**")) {
+            parts.push(<strong key={key++} className="font-semibold">{raw.slice(2, -2)}</strong>);
+          } else if (raw.startsWith("*") && raw.endsWith("*")) {
+            parts.push(<em key={key++} className="italic">{raw.slice(1, -1)}</em>);
+          } else if (raw.startsWith("`") && raw.endsWith("`")) {
+            parts.push(<code key={key++} className="rounded bg-black/5 px-1 py-0.5 font-mono text-xs">{raw.slice(1, -1)}</code>);
+          }
+          lastIndex = matchIndex + raw.length;
+        }
+        if (lastIndex < line.length) {
+          parts.push(line.slice(lastIndex));
+        }
+
+        return <p key={idx}>{parts}</p>;
+      })}
+    </div>
+  );
+}
+
 export default function ChatBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
 
@@ -32,7 +75,7 @@ export default function ChatBubble({ message }: { message: ChatMessage }) {
               : "bg-white border border-black/5 text-ink shadow-card"
           }`}
         >
-          <p className="whitespace-pre-wrap">{message.content}</p>
+          {isUser ? <p className="whitespace-pre-wrap">{message.content}</p> : <FormattedText text={message.content} />}
         </div>
 
         {/* Citations */}
