@@ -20,6 +20,16 @@ function ConfidenceBar({ score }: { score: number }) {
   );
 }
 
+function cleanSnippetText(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/[`#*_~|]/g, " ")
+    .replace(/-{3,}/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export default function CitationBadge({ citation, index }: { citation: Citation; index: number }) {
   const [open, setOpen] = useState(false);
 
@@ -62,7 +72,7 @@ export default function CitationBadge({ citation, index }: { citation: Citation;
 
           {/* Snippet */}
           <p className="mt-3 text-xs leading-relaxed text-t2 italic">
-            "{citation.snippet}"
+            "{cleanSnippetText(citation.snippet)}"
           </p>
 
           {/* Confidence bar */}

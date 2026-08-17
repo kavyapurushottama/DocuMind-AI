@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { apiClient } from "../api/client";
 
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (
@@ -63,22 +64,42 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState("Logging in...");
+
+  useEffect(() => {
+    // Silent wake-up ping to Render backend when user opens login page
+    apiClient.get("/api/health").catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-    try {
-      await doLogin(email, password);
-    } catch (err: any) {
-      if (!err?.response) {
-        setError("Unable to connect to backend server. Please verify your API deployment and VITE_API_URL.");
-      } else {
-        setError(err?.response?.data?.detail || "Incorrect email or password");
+    setLoadingMsg("Logging in...");
+
+    let attempts = 0;
+    const maxAttempts = 3;
+
+    while (attempts < maxAttempts) {
+      try {
+        await doLogin(email, password);
+        return;
+      } catch (err: any) {
+        if (!err?.response && attempts < maxAttempts - 1) {
+          attempts++;
+          setLoadingMsg(`Waking up server (attempt ${attempts}/${maxAttempts - 1})...`);
+          await new Promise((res) => setTimeout(res, 3500));
+        } else {
+          if (!err?.response) {
+            setError("Unable to connect to backend server. Please verify your API deployment and VITE_API_URL.");
+          } else {
+            setError(err?.response?.data?.detail || "Incorrect email or password");
+          }
+          break;
+        }
       }
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   return (
@@ -165,7 +186,7 @@ export default function LoginPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
                   </svg>
-                  Logging in...
+                  {loadingMsg}
                 </span>
               ) : (
                 "Log in"
