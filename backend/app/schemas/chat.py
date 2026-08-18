@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.models.chat import MessageRole
 
@@ -14,7 +14,7 @@ class Citation(BaseModel):
 
 
 class AskRequest(BaseModel):
-    question: str
+    question: str = Field(..., min_length=1, max_length=2000)
     # None = search across all of the user's documents
     document_id: uuid.UUID | None = None
     # None = start a new conversation
