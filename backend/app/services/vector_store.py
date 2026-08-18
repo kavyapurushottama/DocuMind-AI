@@ -172,3 +172,47 @@ def delete_document_chunks(document_id: str) -> None:
         except Exception:
             pass
 
+
+def get_all_user_chunks(user_id: str, document_id: str | None = None, limit: int = 5) -> list[dict]:
+    """Retrieves top document chunks for summary or fallback operations without relying on query vector similarity."""
+    client = get_client()
+    must_filters = [qmodels.FieldCondition(key="user_id", match=qmodels.MatchValue(value=user_id))]
+    if document_id:
+        must_filters.append(qmodels.FieldCondition(key="document_id", match=qmodels.MatchValue(value=document_id)))
+
+    points = []
+    try:
+        res, _ = client.scroll(
+            collection_name=settings.QDRANT_COLLECTION,
+            scroll_filter=qmodels.Filter(must=must_filters),
+            limit=limit,
+            with_payload=True,
+        )
+        points = res
+    except Exception as e:
+        logger.warning(f"Scroll on primary Qdrant failed ({e}). Scrolling local Qdrant...")
+        try:
+            local_client = QdrantClient(path="./qdrant_data")
+            res, _ = local_client.scroll(
+                collection_name=settings.QDRANT_COLLECTION,
+                scroll_filter=qmodels.Filter(must=must_filters),
+                limit=limit,
+                with_payload=True,
+            )
+            points = res
+        except Exception:
+            pass
+
+    return [
+        {
+            "score": 1.0,
+            "text": p.payload["text"],
+            "filename": p.payload["filename"],
+            "page": p.payload.get("page"),
+            "chunk_index": p.payload.get("chunk_index"),
+            "document_id": p.payload.get("document_id"),
+            "chunk_id": str(p.id),
+        }
+        for p in points
+    ]
+

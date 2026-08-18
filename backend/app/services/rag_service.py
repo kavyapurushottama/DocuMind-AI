@@ -124,12 +124,20 @@ def answer_question(
         answer = generate_answer(question, context="", system_prompt=NO_DOCS_SYSTEM_PROMPT)
         return answer, []
 
+    is_summary_query = any(w in question.lower() for w in ["summarize", "summary", "overview", "key concepts", "explain this document", "main conclusions"])
+
     query_vector = embedding_service.embed_query(question)
     chunks = vector_store.search(query_vector, user_id=user_id, document_id=document_id, top_k=TOP_K)
 
     if not chunks and document_id:
         logger.info("Specific document filter returned no chunks. Retrying across all user documents...")
         chunks = vector_store.search(query_vector, user_id=user_id, document_id=None, top_k=TOP_K)
+
+    # For summary requests or if similarity search yielded 0 chunks, fetch actual document chunks directly
+    if not chunks or is_summary_query:
+        doc_chunks = vector_store.get_all_user_chunks(user_id=user_id, document_id=document_id, limit=TOP_K)
+        if doc_chunks:
+            chunks = doc_chunks
 
     if not chunks:
         answer = generate_answer(question, context="", system_prompt=NO_DOCS_SYSTEM_PROMPT)
