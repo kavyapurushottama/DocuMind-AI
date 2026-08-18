@@ -100,11 +100,14 @@ def generate_answer(question: str, context: str, system_prompt: str = SYSTEM_PRO
         if context:
             answer = (
                 f"Based on your document context:\n\n{context[:600]}\n\n"
-                "(Note: AI generation service is temporarily offline or initializing. Above is the relevant context snippet from your document.)"
+                "(Note: Set GROQ_API_KEY or GEMINI_API_KEY in your backend environment variables for full LLM conversational responses.)"
             )
         else:
             answer = (
-                "Hello! I am DocuMind AI. Please upload a document (PDF, DOCX, TXT, or MD) to begin asking questions and analyzing your files."
+                f"Hello! I am DocuMind AI, your document knowledge assistant.\n\n"
+                f"Regarding your question: \"{question}\"\n\n"
+                "I analyze PDF, DOCX, TXT, and Markdown documents to answer specific questions, generate summaries, and provide page-level citations.\n\n"
+                "Tip: Add a free GROQ_API_KEY at console.groq.com/keys to your Render environment variables to enable full AI conversational responses for general questions!"
             )
 
     return sanitize_output(answer)
