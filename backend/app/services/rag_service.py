@@ -42,38 +42,56 @@ def _build_context_block(chunks: list[dict]) -> str:
     return "\n\n".join(parts)
 
 
-def _call_groq(user_prompt: str, system_prompt: str = SYSTEM_PROMPT) -> str:
+def _call_groq(user_prompt: str, chat_history: list[dict] | None = None, system_prompt: str = SYSTEM_PROMPT) -> str:
     if not settings.GROQ_API_KEY:
         raise RuntimeError(
             "GROQ_API_KEY is not set. Get a free key at https://console.groq.com/keys"
         )
     client = Groq(api_key=settings.GROQ_API_KEY)
+    
+    messages = [{"role": "system", "content": system_prompt}]
+    if chat_history:
+        for msg in chat_history[-6:]:
+            messages.append({"role": msg["role"], "content": msg["content"]})
+    messages.append({"role": "user", "content": user_prompt})
+
     resp = client.chat.completions.create(
         model=settings.GROQ_MODEL,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
+        messages=messages,
         temperature=0.2,
     )
     return resp.choices[0].message.content
 
 
-def _call_gemini(user_prompt: str, system_prompt: str = SYSTEM_PROMPT) -> str:
+def _call_gemini(user_prompt: str, chat_history: list[dict] | None = None, system_prompt: str = SYSTEM_PROMPT) -> str:
     if not settings.GEMINI_API_KEY:
         raise RuntimeError(
             "GEMINI_API_KEY is not set. Get a free key at https://aistudio.google.com/apikey"
         )
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    
+    prompt_parts = []
+    if chat_history:
+        for msg in chat_history[-6:]:
+            role_label = "User" if msg["role"] == "user" else "Assistant"
+            prompt_parts.append(f"{role_label}: {msg['content']}")
+    prompt_parts.append(f"User: {user_prompt}")
+    full_prompt = "\n\n".join(prompt_parts)
+
     resp = client.models.generate_content(
         model=settings.GEMINI_MODEL,
-        contents=user_prompt,
+        contents=full_prompt,
         config=types.GenerateContentConfig(system_instruction=system_prompt, temperature=0.2),
     )
     return resp.text
 
 
-def generate_answer(question: str, context: str, system_prompt: str = SYSTEM_PROMPT) -> str:
+def generate_answer(
+    question: str,
+    context: str,
+    chat_history: list[dict] | None = None,
+    system_prompt: str = SYSTEM_PROMPT
+) -> str:
     if context:
         user_prompt = f"Context from your documents:\n\n{context}\n\nQuestion: {question}"
     else:
@@ -84,14 +102,14 @@ def generate_answer(question: str, context: str, system_prompt: str = SYSTEM_PRO
     # Try Groq API first if key exists
     if settings.GROQ_API_KEY:
         try:
-            answer = _call_groq(user_prompt, system_prompt)
+            answer = _call_groq(user_prompt, chat_history=chat_history, system_prompt=system_prompt)
         except Exception as e:
             logger.warning(f"Groq LLM call failed ({e}). Trying Gemini fallback...")
 
     # Try Gemini API fallback
     if not answer and settings.GEMINI_API_KEY:
         try:
-            answer = _call_gemini(user_prompt, system_prompt)
+            answer = _call_gemini(user_prompt, chat_history=chat_history, system_prompt=system_prompt)
         except Exception as e:
             logger.warning(f"Gemini LLM call failed ({e})...")
 
@@ -118,15 +136,23 @@ def answer_question(
     user_id: str,
     document_id: str | None = None,
     has_documents: bool = True,
+    chat_history: list[dict] | None = None,
 ) -> tuple[str, list[Citation]]:
     """Full query flow: embed -> retrieve -> ground -> generate -> cite."""
     if not has_documents:
-        answer = generate_answer(question, context="", system_prompt=NO_DOCS_SYSTEM_PROMPT)
+        answer = generate_answer(question, context="", chat_history=chat_history, system_prompt=NO_DOCS_SYSTEM_PROMPT)
         return answer, []
 
     is_summary_query = any(w in question.lower() for w in ["summarize", "summary", "overview", "key concepts", "explain this document", "main conclusions"])
 
-    query_vector = embedding_service.embed_query(question)
+    # For follow-up queries, contextualize search text with the previous user question
+    search_query = question
+    if chat_history and len(question.split()) < 8:
+        prev_user_msgs = [m["content"] for m in chat_history if m.get("role") == "user"]
+        if prev_user_msgs:
+            search_query = f"{prev_user_msgs[-1]} {question}"
+
+    query_vector = embedding_service.embed_query(search_query)
     chunks = vector_store.search(query_vector, user_id=user_id, document_id=document_id, top_k=TOP_K)
 
     if not chunks and document_id:
@@ -140,11 +166,11 @@ def answer_question(
             chunks = doc_chunks
 
     if not chunks:
-        answer = generate_answer(question, context="", system_prompt=NO_DOCS_SYSTEM_PROMPT)
+        answer = generate_answer(question, context="", chat_history=chat_history, system_prompt=NO_DOCS_SYSTEM_PROMPT)
         return answer, []
 
     context = _build_context_block(chunks)
-    answer = generate_answer(question, context, system_prompt=SYSTEM_PROMPT)
+    answer = generate_answer(question, context, chat_history=chat_history, system_prompt=SYSTEM_PROMPT)
 
     citations = [
         Citation(
@@ -157,3 +183,123 @@ def answer_question(
         for c in chunks
     ]
     return answer, citations
+
+
+def stream_generate_answer(
+    question: str,
+    context: str,
+    chat_history: list[dict] | None = None,
+    system_prompt: str = SYSTEM_PROMPT
+):
+    """Generator yielding streaming text tokens from LLM (Groq -> Gemini -> Fallback)."""
+    if context:
+        user_prompt = f"Context from your documents:\n\n{context}\n\nQuestion: {question}"
+    else:
+        user_prompt = question
+
+    # Try Groq API streaming first
+    if settings.GROQ_API_KEY:
+        try:
+            client = Groq(api_key=settings.GROQ_API_KEY)
+            messages = [{"role": "system", "content": system_prompt}]
+            if chat_history:
+                for msg in chat_history[-6:]:
+                    messages.append({"role": msg["role"], "content": msg["content"]})
+            messages.append({"role": "user", "content": user_prompt})
+
+            response_stream = client.chat.completions.create(
+                model=settings.GROQ_MODEL,
+                messages=messages,
+                temperature=0.2,
+                stream=True
+            )
+            for chunk in response_stream:
+                content = chunk.choices[0].delta.content or ""
+                if content:
+                    yield content
+            return
+        except Exception as e:
+            logger.warning(f"Groq streaming failed ({e}). Trying Gemini fallback...")
+
+    # Try Gemini API streaming fallback
+    if settings.GEMINI_API_KEY:
+        try:
+            client = genai.Client(api_key=settings.GEMINI_API_KEY)
+            prompt_parts = []
+            if chat_history:
+                for msg in chat_history[-6:]:
+                    role_label = "User" if msg["role"] == "user" else "Assistant"
+                    prompt_parts.append(f"{role_label}: {msg['content']}")
+            prompt_parts.append(f"User: {user_prompt}")
+            full_prompt = "\n\n".join(prompt_parts)
+
+            response_stream = client.models.generate_content_stream(
+                model=settings.GEMINI_MODEL,
+                contents=full_prompt,
+                config=types.GenerateContentConfig(system_instruction=system_prompt, temperature=0.2),
+            )
+            for chunk in response_stream:
+                if chunk.text:
+                    yield chunk.text
+            return
+        except Exception as e:
+            logger.warning(f"Gemini streaming failed ({e})...")
+
+    # Fallback word-by-word streaming generator if no API keys are present
+    fallback_text = generate_answer(question, context, chat_history=chat_history, system_prompt=system_prompt)
+    words = fallback_text.split(" ")
+    for i, word in enumerate(words):
+        yield word + (" " if i < len(words) - 1 else "")
+
+
+def stream_answer_question(
+    question: str,
+    user_id: str,
+    document_id: str | None = None,
+    has_documents: bool = True,
+    chat_history: list[dict] | None = None,
+) -> tuple[list[Citation], any]:
+    """Retrieve grounded citations and return (citations, token_stream_generator)."""
+    if not has_documents:
+        token_stream = stream_generate_answer(question, context="", chat_history=chat_history, system_prompt=NO_DOCS_SYSTEM_PROMPT)
+        return [], token_stream
+
+    is_summary_query = any(w in question.lower() for w in ["summarize", "summary", "overview", "key concepts", "explain this document", "main conclusions"])
+
+    search_query = question
+    if chat_history and len(question.split()) < 8:
+        prev_user_msgs = [m["content"] for m in chat_history if m.get("role") == "user"]
+        if prev_user_msgs:
+            search_query = f"{prev_user_msgs[-1]} {question}"
+
+    query_vector = embedding_service.embed_query(search_query)
+    chunks = vector_store.search(query_vector, user_id=user_id, document_id=document_id, top_k=TOP_K)
+
+    if not chunks and document_id:
+        logger.info("Specific document filter returned no chunks. Retrying across all user documents...")
+        chunks = vector_store.search(query_vector, user_id=user_id, document_id=None, top_k=TOP_K)
+
+    if not chunks or is_summary_query:
+        doc_chunks = vector_store.get_all_user_chunks(user_id=user_id, document_id=document_id, limit=TOP_K)
+        if doc_chunks:
+            chunks = doc_chunks
+
+    if not chunks:
+        token_stream = stream_generate_answer(question, context="", chat_history=chat_history, system_prompt=NO_DOCS_SYSTEM_PROMPT)
+        return [], token_stream
+
+    context = _build_context_block(chunks)
+    citations = [
+        Citation(
+            filename=c["filename"],
+            page=c.get("page"),
+            chunk_id=c["chunk_id"],
+            snippet=(c["text"][:220] + "...") if len(c["text"]) > 220 else c["text"],
+            score=round(c["score"], 4),
+        )
+        for c in chunks
+    ]
+    token_stream = stream_generate_answer(question, context, chat_history=chat_history, system_prompt=SYSTEM_PROMPT)
+    return citations, token_stream
+
+

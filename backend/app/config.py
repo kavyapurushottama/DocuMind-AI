@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     LLM_PROVIDER: str = "groq"  # "groq" or "gemini"
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GEMINI_MODEL: str = "gemini-1.5-flash"
     GEMINI_EMBEDDING_MODEL: str = "text-embedding-004"
     EMBEDDING_DIM: int = 384
 

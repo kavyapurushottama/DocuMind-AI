@@ -7,6 +7,7 @@ from app.models.document import DocumentStatus
 
 class DocumentResponse(BaseModel):
     id: uuid.UUID
+    workspace_id: uuid.UUID | None = None
     filename: str
     file_type: str
     file_size_bytes: int

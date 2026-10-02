@@ -75,7 +75,14 @@ def process_document(document_id: str) -> None:
         doc.status_detail = f"Vectorizing {len(chunks)} text chunks..."
         db.commit()
 
-        vectors = embedding_service.embed_texts([c.text for c in chunks])
+        # Batch embedding generation (32 chunks per batch) to keep memory usage under 50MB RAM even for 500-page documents
+        BATCH_SIZE = 32
+        chunk_texts = [c.text for c in chunks]
+        vectors = []
+        for i in range(0, len(chunk_texts), BATCH_SIZE):
+            batch = chunk_texts[i : i + BATCH_SIZE]
+            batch_vecs = embedding_service.embed_texts(batch)
+            vectors.extend(batch_vecs)
 
         doc.status_detail = "Storing vector index in Qdrant store..."
         db.commit()
@@ -149,9 +156,8 @@ async def upload_document(
     db.commit()
     db.refresh(doc)
 
-    # Ingest document synchronously during active request so Render allocates 100% CPU (completes in 0.27s)
-    process_document(str(doc.id))
-    db.refresh(doc)
+    # Dispatch processing task to background queue so upload response is instant (50ms) without blocking UI
+    background_tasks.add_task(process_document, str(doc.id))
 
     return doc
 

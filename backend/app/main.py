@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from sqlalchemy import text
 import app.models  # Ensures all ORM models are registered in Base.metadata
-from app.api import routes_auth, routes_documents, routes_chat
+from app.api import routes_auth, routes_documents, routes_chat, routes_workspaces
 from app.config import settings
 from app.database import Base, engine
 
@@ -63,6 +63,7 @@ app.add_middleware(
 app.include_router(routes_auth.router)
 app.include_router(routes_documents.router)
 app.include_router(routes_chat.router)
+app.include_router(routes_workspaces.router)
 
 
 @app.get("/")
