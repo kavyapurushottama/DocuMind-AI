@@ -165,7 +165,7 @@ async def upload_document(
 def _auto_cleanup_stuck_documents(db: Session, user_id: uuid.UUID) -> None:
     """Auto-recovers any document frozen in processing state from an old server build/deploy."""
     from datetime import datetime, timezone, timedelta
-    cutoff = datetime.now(timezone.utc) - timedelta(minutes=3)
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
     stuck_docs = (
         db.query(Document)
         .filter(
