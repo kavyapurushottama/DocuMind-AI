@@ -1,11 +1,22 @@
-import { useCallback, useEffect, useState } from "react";
+import React, { createContext, useContext, useCallback, useEffect, useState, ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import * as authApi from "../api/auth";
 import { User } from "../types";
 
 const TOKEN_KEY = "docmind_token";
 
-export function useAuth() {
+interface AuthContextType {
+  user: User | null;
+  loading: boolean;
+  doLogin: (email: string, password: string) => Promise<void>;
+  doSignup: (email: string, password: string, fullName?: string) => Promise<void>;
+  logout: () => void;
+  isAuthenticated: boolean;
+}
+
+const AuthContext = createContext<AuthContextType | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -13,6 +24,7 @@ export function useAuth() {
   const loadUser = useCallback(async () => {
     const token = localStorage.getItem(TOKEN_KEY);
     if (!token) {
+      setUser(null);
       setLoading(false);
       return;
     }
@@ -21,6 +33,7 @@ export function useAuth() {
       setUser(me);
     } catch {
       localStorage.removeItem(TOKEN_KEY);
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -50,5 +63,17 @@ export function useAuth() {
     navigate("/login");
   };
 
-  return { user, loading, doLogin, doSignup, logout, isAuthenticated: !!user };
+  return React.createElement(
+    AuthContext.Provider,
+    { value: { user, loading, doLogin, doSignup, logout, isAuthenticated: !!user } },
+    children
+  );
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return ctx;
 }

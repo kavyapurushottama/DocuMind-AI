@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Navigate, Route, Routes, Link, useLocation } from "react-router-dom";
-import { useAuth } from "./hooks/useAuth";
+import { useAuth, AuthProvider } from "./hooks/useAuth";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -137,13 +137,15 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login"  element={<LoginPage />} />
-      <Route path="/signup" element={<SignupPage />} />
-      <Route path="/dashboard" element={<ProtectedLayout><DashboardPage /></ProtectedLayout>} />
-      <Route path="/upload"    element={<Navigate to="/dashboard" replace />} />
-      <Route path="/chat"      element={<ProtectedLayout><ChatPage /></ProtectedLayout>} />
-      <Route path="*"          element={<Navigate to="/dashboard" replace />} />
-    </Routes>
+    <AuthProvider>
+      <Routes>
+        <Route path="/login"  element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/dashboard" element={<ProtectedLayout><DashboardPage /></ProtectedLayout>} />
+        <Route path="/upload"    element={<Navigate to="/dashboard" replace />} />
+        <Route path="/chat"      element={<ProtectedLayout><ChatPage /></ProtectedLayout>} />
+        <Route path="*"          element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </AuthProvider>
   );
 }
