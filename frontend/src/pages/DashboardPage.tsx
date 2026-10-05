@@ -96,9 +96,10 @@ export default function DashboardPage() {
     queryKey: ["documents"],
     queryFn: listDocuments,
     refetchInterval: (query) => {
+      if (query.state.status === "error") return false;
       const docs = query.state.data as any[] | undefined;
       const stillWorking = docs?.some((d) => d.status === "pending" || d.status === "processing");
-      return stillWorking ? 2000 : false;
+      return stillWorking ? 5000 : false;
     },
   });
 
