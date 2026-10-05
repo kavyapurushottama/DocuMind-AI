@@ -13,42 +13,76 @@ function timeAgo(iso: string) {
 
 function FormattedText({ text }: { text: string }) {
   const lines = text.split("\n");
+
+  const renderInline = (str: string) => {
+    const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`)/g;
+    const matches = [...str.matchAll(regex)];
+    if (matches.length === 0) return str;
+    const parts = [];
+    let lastIndex = 0;
+    let key = 0;
+    for (const match of matches) {
+      const matchIndex = match.index!;
+      if (matchIndex > lastIndex) {
+        parts.push(str.slice(lastIndex, matchIndex));
+      }
+      const raw = match[0];
+      if (raw.startsWith("**") && raw.endsWith("**")) {
+        parts.push(<strong key={key++} className="font-semibold text-ink">{raw.slice(2, -2)}</strong>);
+      } else if (raw.startsWith("*") && raw.endsWith("*")) {
+        parts.push(<em key={key++} className="italic text-t2">{raw.slice(1, -1)}</em>);
+      } else if (raw.startsWith("`") && raw.endsWith("`")) {
+        parts.push(<code key={key++} className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-xs text-accent">{raw.slice(1, -1)}</code>);
+      }
+      lastIndex = matchIndex + raw.length;
+    }
+    if (lastIndex < str.length) {
+      parts.push(str.slice(lastIndex));
+    }
+    return parts;
+  };
+
   return (
     <div className="space-y-1.5 leading-relaxed">
       {lines.map((line, idx) => {
-        if (!line.trim()) return <div key={idx} className="h-1" />;
+        const trimmed = line.trim();
+        if (!trimmed) return <div key={idx} className="h-1" />;
 
-        const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`)/g;
-        const matches = [...line.matchAll(regex)];
-
-        if (matches.length === 0) {
-          return <p key={idx}>{line}</p>;
+        // Header parsing: #, ##, ###
+        if (line.startsWith("### ")) {
+          return (
+            <h3 key={idx} className="text-sm font-bold text-accent mt-3 mb-1 tracking-tight">
+              {renderInline(line.slice(4))}
+            </h3>
+          );
+        }
+        if (line.startsWith("## ")) {
+          return (
+            <h2 key={idx} className="text-base font-bold text-ink mt-3.5 mb-1 tracking-tight">
+              {renderInline(line.slice(3))}
+            </h2>
+          );
+        }
+        if (line.startsWith("# ")) {
+          return (
+            <h1 key={idx} className="text-lg font-bold text-ink mt-4 mb-1.5 tracking-tight border-b border-black/5 pb-1">
+              {renderInline(line.slice(2))}
+            </h1>
+          );
         }
 
-        const parts = [];
-        let lastIndex = 0;
-        let key = 0;
-
-        for (const match of matches) {
-          const matchIndex = match.index!;
-          if (matchIndex > lastIndex) {
-            parts.push(line.slice(lastIndex, matchIndex));
-          }
-          const raw = match[0];
-          if (raw.startsWith("**") && raw.endsWith("**")) {
-            parts.push(<strong key={key++} className="font-semibold">{raw.slice(2, -2)}</strong>);
-          } else if (raw.startsWith("*") && raw.endsWith("*")) {
-            parts.push(<em key={key++} className="italic">{raw.slice(1, -1)}</em>);
-          } else if (raw.startsWith("`") && raw.endsWith("`")) {
-            parts.push(<code key={key++} className="rounded bg-black/5 px-1 py-0.5 font-mono text-xs">{raw.slice(1, -1)}</code>);
-          }
-          lastIndex = matchIndex + raw.length;
-        }
-        if (lastIndex < line.length) {
-          parts.push(line.slice(lastIndex));
+        // Bullet point parsing: - or *
+        if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+          const bulletContent = trimmed.slice(2);
+          return (
+            <div key={idx} className="flex items-start gap-2 pl-1 py-0.5">
+              <span className="text-accent font-bold text-xs mt-0.5 shrink-0">•</span>
+              <div className="flex-1 text-ink">{renderInline(bulletContent)}</div>
+            </div>
+          );
         }
 
-        return <p key={idx}>{parts}</p>;
+        return <p key={idx}>{renderInline(line)}</p>;
       })}
     </div>
   );

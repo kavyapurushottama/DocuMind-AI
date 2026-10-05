@@ -31,6 +31,8 @@ backend/test_qdrant_db/
 !.env.example
 
 # Local databases & uploads
+*.db
+*.sqlite
 uploads/
 qdrant_data/
 node_modules/

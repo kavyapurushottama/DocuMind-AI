@@ -13,7 +13,7 @@ from app.models.chat import Conversation, Message, MessageRole
 from app.models.document import Document, DocumentStatus
 from app.models.user import User
 from app.schemas.chat import AskRequest, AskResponse, ConversationResponse, ConversationSummary, MessageResponse
-from app.services.rag_service import answer_question, stream_answer_question
+from app.services.rag_service import answer_question, stream_answer_question, _clean_markdown_formatting
 
 logger = logging.getLogger(__name__)
 
@@ -67,11 +67,13 @@ def ask(data: AskRequest, db: Session = Depends(get_db), current_user: User = De
         > 0
     )
 
+    target_doc_id = data.document_id or conversation.document_id
+
     try:
         answer_text, citations = answer_question(
             question=sanitized_question,
             user_id=str(current_user.id),
-            document_id=str(data.document_id) if data.document_id else None,
+            document_id=str(target_doc_id) if target_doc_id else None,
             has_documents=has_docs,
             chat_history=chat_history,
         )
@@ -113,6 +115,9 @@ def ask_stream(data: AskRequest, db: Session = Depends(get_db), current_user: Us
         )
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
+        if data.document_id is not None:
+            conversation.document_id = data.document_id
+            db.commit()
     else:
         title = sanitized_question[:60] + ("..." if len(sanitized_question) > 60 else "")
         conversation = Conversation(user_id=current_user.id, document_id=data.document_id, title=title)
@@ -139,10 +144,12 @@ def ask_stream(data: AskRequest, db: Session = Depends(get_db), current_user: Us
         > 0
     )
 
+    target_doc_id = data.document_id or conversation.document_id
+
     citations, token_generator = stream_answer_question(
         question=sanitized_question,
         user_id=str(current_user.id),
-        document_id=str(data.document_id) if data.document_id else None,
+        document_id=str(target_doc_id) if target_doc_id else None,
         has_documents=has_docs,
         chat_history=chat_history,
     )
@@ -165,10 +172,11 @@ def ask_stream(data: AskRequest, db: Session = Depends(get_db), current_user: Us
         # Save assistant message to PostgreSQL database upon completion
         db_stream = SessionLocal()
         try:
+            cleaned_text = _clean_markdown_formatting(full_answer) if full_answer else "I could not generate an answer."
             assistant_msg = Message(
                 conversation_id=uuid.UUID(conv_id_str),
                 role=MessageRole.ASSISTANT,
-                content=full_answer if full_answer else "I could not generate an answer.",
+                content=cleaned_text,
                 citations=citations_json,
             )
             db_stream.add(assistant_msg)
