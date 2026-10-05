@@ -190,7 +190,13 @@ def _auto_cleanup_stuck_documents(db: Session, user_id: uuid.UUID) -> None:
 
 @router.get("", response_model=list[DocumentResponse])
 def list_documents(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    _auto_cleanup_stuck_documents(db, current_user.id)
+    try:
+        _auto_cleanup_stuck_documents(db, current_user.id)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Auto cleanup notice: {e}")
+        db.rollback()
+
     return (
         db.query(Document)
         .filter(Document.user_id == current_user.id)
@@ -201,10 +207,16 @@ def list_documents(db: Session = Depends(get_db), current_user: User = Depends(g
 
 @router.get("/dashboard/stats", response_model=DashboardStats)
 def dashboard_stats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    _auto_cleanup_stuck_documents(db, current_user.id)
+    try:
+        _auto_cleanup_stuck_documents(db, current_user.id)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Auto cleanup notice: {e}")
+        db.rollback()
+
     docs = db.query(Document).filter(Document.user_id == current_user.id).order_by(Document.created_at.desc()).all()
     total_chats = db.query(Conversation).filter(Conversation.user_id == current_user.id).count()
-    storage_used = sum(d.file_size_bytes for d in docs)
+    storage_used = sum((d.file_size_bytes or 0) for d in docs)
     return DashboardStats(
         total_documents=len(docs),
         total_chats=total_chats,
