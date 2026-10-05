@@ -67,6 +67,26 @@ app.include_router(routes_chat.router)
 app.include_router(routes_workspaces.router)
 
 
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import logging
+    logging.getLogger(__name__).exception(f"Unhandled exception: {exc}")
+    origin = request.headers.get("origin", "*")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal server error occurred.", "error": str(exc)[:500]},
+        headers={
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        },
+    )
+
+
 @app.get("/")
 def root():
     return {"status": "ok", "service": "docmind-ai-backend", "message": "DocuMind AI Backend is live!"}

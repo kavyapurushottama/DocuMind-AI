@@ -164,23 +164,28 @@ async def upload_document(
 
 def _auto_cleanup_stuck_documents(db: Session, user_id: uuid.UUID) -> None:
     """Auto-recovers any document frozen in processing state from an old server build/deploy."""
-    from datetime import datetime, timezone, timedelta
-    cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
-    stuck_docs = (
-        db.query(Document)
-        .filter(
-            Document.user_id == user_id,
-            Document.status.in_([DocumentStatus.PROCESSING, DocumentStatus.PENDING]),
-            Document.created_at < cutoff,
+    try:
+        from datetime import datetime, timezone, timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
+        stuck_docs = (
+            db.query(Document)
+            .filter(
+                Document.user_id == user_id,
+                Document.status.in_([DocumentStatus.PROCESSING, DocumentStatus.PENDING]),
+                Document.created_at < cutoff,
+            )
+            .all()
         )
-        .all()
-    )
-    if stuck_docs:
-        for doc in stuck_docs:
-            doc.status = DocumentStatus.FAILED
-            doc.status_detail = None
-            doc.error_message = "Ingestion timed out on previous server build. Please delete and re-upload."
-        db.commit()
+        if stuck_docs:
+            for doc in stuck_docs:
+                doc.status = DocumentStatus.FAILED
+                doc.status_detail = None
+                doc.error_message = "Ingestion timed out on previous server build. Please delete and re-upload."
+            db.commit()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Auto cleanup stuck documents failed: {e}")
+        db.rollback()
 
 
 @router.get("", response_model=list[DocumentResponse])
