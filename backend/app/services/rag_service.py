@@ -70,9 +70,7 @@ def _build_context_block(chunks: list[dict]) -> str:
 
 def _call_groq(user_prompt: str, chat_history: list[dict] | None = None, system_prompt: str = SYSTEM_PROMPT) -> str:
     if not settings.GROQ_API_KEY:
-        raise RuntimeError(
-            "GROQ_API_KEY is not set. Get a free key at https://console.groq.com/keys"
-        )
+        raise RuntimeError("GROQ_API_KEY is not set.")
     client = Groq(api_key=settings.GROQ_API_KEY)
     
     messages = [{"role": "system", "content": system_prompt}]
@@ -81,20 +79,31 @@ def _call_groq(user_prompt: str, chat_history: list[dict] | None = None, system_
             messages.append({"role": msg["role"], "content": msg["content"]})
     messages.append({"role": "user", "content": user_prompt})
 
-    resp = client.chat.completions.create(
-        model=settings.GROQ_MODEL,
-        messages=messages,
-        temperature=0.2,
-        max_tokens=2048,
-    )
-    return resp.choices[0].message.content
+    candidate_models = [settings.GROQ_MODEL, "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
+    seen = set()
+    models_to_try = [m for m in candidate_models if m and not (m in seen or seen.add(m))]
+
+    last_exc = None
+    for model_name in models_to_try:
+        try:
+            resp = client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=0.2,
+                max_tokens=2048,
+            )
+            if resp.choices and resp.choices[0].message.content:
+                return resp.choices[0].message.content
+        except Exception as e:
+            logger.warning(f"Groq model '{model_name}' call failed ({e}). Trying next fallback model...")
+            last_exc = e
+
+    raise last_exc or RuntimeError("All Groq model attempts failed.")
 
 
 def _call_gemini(user_prompt: str, chat_history: list[dict] | None = None, system_prompt: str = SYSTEM_PROMPT) -> str:
     if not settings.GEMINI_API_KEY:
-        raise RuntimeError(
-            "GEMINI_API_KEY is not set. Get a free key at https://aistudio.google.com/apikey"
-        )
+        raise RuntimeError("GEMINI_API_KEY is not set.")
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
     
     prompt_parts = []
@@ -105,16 +114,29 @@ def _call_gemini(user_prompt: str, chat_history: list[dict] | None = None, syste
     prompt_parts.append(f"User: {user_prompt}")
     full_prompt = "\n\n".join(prompt_parts)
 
-    resp = client.models.generate_content(
-        model=settings.GEMINI_MODEL,
-        contents=full_prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=system_prompt,
-            temperature=0.2,
-            max_output_tokens=2048,
-        ),
-    )
-    return resp.text
+    candidate_models = [settings.GEMINI_MODEL, "gemini-3.8-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
+    seen = set()
+    models_to_try = [m for m in candidate_models if m and not (m in seen or seen.add(m))]
+
+    last_exc = None
+    for model_name in models_to_try:
+        try:
+            resp = client.models.generate_content(
+                model=model_name,
+                contents=full_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=0.2,
+                    max_output_tokens=2048,
+                ),
+            )
+            if resp.text:
+                return resp.text
+        except Exception as e:
+            logger.warning(f"Gemini model '{model_name}' call failed ({e}). Trying next fallback model...")
+            last_exc = e
+
+    raise last_exc or RuntimeError("All Gemini model attempts failed.")
 
 
 def generate_answer(
@@ -226,56 +248,72 @@ def stream_generate_answer(
 
     # Try Groq API streaming first
     if settings.GROQ_API_KEY:
-        try:
-            client = Groq(api_key=settings.GROQ_API_KEY)
-            messages = [{"role": "system", "content": system_prompt}]
-            if chat_history:
-                for msg in chat_history[-6:]:
-                    messages.append({"role": msg["role"], "content": msg["content"]})
-            messages.append({"role": "user", "content": user_prompt})
+        client = Groq(api_key=settings.GROQ_API_KEY)
+        messages = [{"role": "system", "content": system_prompt}]
+        if chat_history:
+            for msg in chat_history[-6:]:
+                messages.append({"role": msg["role"], "content": msg["content"]})
+        messages.append({"role": "user", "content": user_prompt})
 
-            response_stream = client.chat.completions.create(
-                model=settings.GROQ_MODEL,
-                messages=messages,
-                temperature=0.2,
-                max_tokens=2048,
-                stream=True
-            )
-            for chunk in response_stream:
-                content = chunk.choices[0].delta.content or ""
-                if content:
-                    yield content
-            return
-        except Exception as e:
-            logger.warning(f"Groq streaming failed ({e}). Trying Gemini fallback...")
+        candidate_groq = [settings.GROQ_MODEL, "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
+        seen_groq = set()
+        models_groq = [m for m in candidate_groq if m and not (m in seen_groq or seen_groq.add(m))]
+
+        for model_name in models_groq:
+            try:
+                response_stream = client.chat.completions.create(
+                    model=model_name,
+                    messages=messages,
+                    temperature=0.2,
+                    max_tokens=2048,
+                    stream=True
+                )
+                yielded_any = False
+                for chunk in response_stream:
+                    content = chunk.choices[0].delta.content or ""
+                    if content:
+                        yielded_any = True
+                        yield content
+                if yielded_any:
+                    return
+            except Exception as e:
+                logger.warning(f"Groq streaming model '{model_name}' failed ({e}). Trying next fallback...")
 
     # Try Gemini API streaming fallback
     if settings.GEMINI_API_KEY:
-        try:
-            client = genai.Client(api_key=settings.GEMINI_API_KEY)
-            prompt_parts = []
-            if chat_history:
-                for msg in chat_history[-6:]:
-                    role_label = "User" if msg["role"] == "user" else "Assistant"
-                    prompt_parts.append(f"{role_label}: {msg['content']}")
-            prompt_parts.append(f"User: {user_prompt}")
-            full_prompt = "\n\n".join(prompt_parts)
+        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        prompt_parts = []
+        if chat_history:
+            for msg in chat_history[-6:]:
+                role_label = "User" if msg["role"] == "user" else "Assistant"
+                prompt_parts.append(f"{role_label}: {msg['content']}")
+        prompt_parts.append(f"User: {user_prompt}")
+        full_prompt = "\n\n".join(prompt_parts)
 
-            response_stream = client.models.generate_content_stream(
-                model=settings.GEMINI_MODEL,
-                contents=full_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    temperature=0.2,
-                    max_output_tokens=2048,
-                ),
-            )
-            for chunk in response_stream:
-                if chunk.text:
-                    yield chunk.text
-            return
-        except Exception as e:
-            logger.warning(f"Gemini streaming failed ({e})...")
+        candidate_gemini = [settings.GEMINI_MODEL, "gemini-3.8-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
+        seen_gemini = set()
+        models_gemini = [m for m in candidate_gemini if m and not (m in seen_gemini or seen_gemini.add(m))]
+
+        for model_name in models_gemini:
+            try:
+                response_stream = client.models.generate_content_stream(
+                    model=model_name,
+                    contents=full_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        temperature=0.2,
+                        max_output_tokens=2048,
+                    ),
+                )
+                yielded_any = False
+                for chunk in response_stream:
+                    if chunk.text:
+                        yielded_any = True
+                        yield chunk.text
+                if yielded_any:
+                    return
+            except Exception as e:
+                logger.warning(f"Gemini streaming model '{model_name}' failed ({e})...")
 
     # Fallback word-by-word streaming generator if no API keys are present
     fallback_text = generate_answer(question, context, chat_history=chat_history, system_prompt=system_prompt)

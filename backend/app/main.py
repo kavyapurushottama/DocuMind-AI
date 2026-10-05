@@ -13,25 +13,44 @@ Base.metadata.create_all(bind=engine)
 # Add columns dynamically if they don't exist
 with engine.connect() as connection:
     is_postgres = engine.dialect.name == "postgresql"
-    statements = [
-        "ALTER TABLE conversations ADD COLUMN is_pinned BOOLEAN DEFAULT FALSE NOT NULL;" if not is_postgres else "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE NOT NULL;",
-        "ALTER TABLE documents ADD COLUMN status_detail VARCHAR;" if not is_postgres else "ALTER TABLE documents ADD COLUMN IF NOT EXISTS status_detail VARCHAR;",
-        "ALTER TABLE documents ADD COLUMN workspace_id UUID REFERENCES workspaces(id) ON DELETE SET NULL;" if not is_postgres else "ALTER TABLE documents ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE SET NULL;",
-        "ALTER TABLE conversations ADD COLUMN workspace_id UUID REFERENCES workspaces(id) ON DELETE SET NULL;" if not is_postgres else "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE SET NULL;",
-        "ALTER TABLE documents ADD COLUMN author VARCHAR;" if not is_postgres else "ALTER TABLE documents ADD COLUMN IF NOT EXISTS author VARCHAR;",
-        "ALTER TABLE documents ADD COLUMN created_date TIMESTAMP WITH TIME ZONE;" if not is_postgres else "ALTER TABLE documents ADD COLUMN IF NOT EXISTS created_date TIMESTAMP WITH TIME ZONE;",
-        "ALTER TABLE documents ADD COLUMN modified_date TIMESTAMP WITH TIME ZONE;" if not is_postgres else "ALTER TABLE documents ADD COLUMN IF NOT EXISTS modified_date TIMESTAMP WITH TIME ZONE;",
-        "ALTER TABLE documents ADD COLUMN tags VARCHAR;" if not is_postgres else "ALTER TABLE documents ADD COLUMN IF NOT EXISTS tags VARCHAR;",
-        "ALTER TABLE documents ADD COLUMN language VARCHAR;" if not is_postgres else "ALTER TABLE documents ADD COLUMN IF NOT EXISTS language VARCHAR;",
-        "ALTER TABLE documents ADD COLUMN department VARCHAR;" if not is_postgres else "ALTER TABLE documents ADD COLUMN IF NOT EXISTS department VARCHAR;",
-        "ALTER TABLE documents ADD COLUMN document_type VARCHAR;" if not is_postgres else "ALTER TABLE documents ADD COLUMN IF NOT EXISTS document_type VARCHAR;",
+    # Ensure workspaces table exists before referencing it
+    try:
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS workspaces (
+                id UUID PRIMARY KEY,
+                user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                name VARCHAR NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        """))
+        connection.commit()
+    except Exception:
+        pass
+
+    col_statements = [
+        ("conversations", "is_pinned", "BOOLEAN DEFAULT FALSE NOT NULL"),
+        ("conversations", "workspace_id", "UUID REFERENCES workspaces(id) ON DELETE SET NULL" if is_postgres else "UUID"),
+        ("documents", "status_detail", "VARCHAR"),
+        ("documents", "workspace_id", "UUID REFERENCES workspaces(id) ON DELETE SET NULL" if is_postgres else "UUID"),
+        ("documents", "author", "VARCHAR"),
+        ("documents", "created_date", "TIMESTAMP WITH TIME ZONE"),
+        ("documents", "modified_date", "TIMESTAMP WITH TIME ZONE"),
+        ("documents", "tags", "VARCHAR"),
+        ("documents", "language", "VARCHAR"),
+        ("documents", "department", "VARCHAR"),
+        ("documents", "document_type", "VARCHAR"),
     ]
-    for stmt in statements:
+    for table, col, col_type in col_statements:
         try:
+            if is_postgres:
+                stmt = f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_type};"
+            else:
+                stmt = f"ALTER TABLE {table} ADD COLUMN {col} {col_type};"
             connection.execute(text(stmt))
             connection.commit()
         except Exception:
             pass
+
 
 
 
