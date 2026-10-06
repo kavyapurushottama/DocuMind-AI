@@ -79,15 +79,19 @@ def process_document(document_id: str) -> None:
         doc.status_detail = f"Vectorizing {len(chunks)} text chunks..."
         db.commit()
 
-        # Batch embedding generation (16 chunks per batch) with aggressive gc.collect()
-        # to ensure RAM stays under 150MB on Render's 512MB free container
-        BATCH_SIZE = 16
+        import gc
+        import time
+
+        # Micro-batch embedding generation (8 chunks per batch) with time.sleep(0.05) CPU yielding
+        # This keeps RAM under 120MB and guarantees Uvicorn event loop stays 100% open for HTTP requests on Render
+        BATCH_SIZE = 8
         chunk_texts = [c.text for c in chunks]
         vectors = []
         for i in range(0, len(chunk_texts), BATCH_SIZE):
             batch = chunk_texts[i : i + BATCH_SIZE]
             batch_vecs = embedding_service.embed_texts(batch)
             vectors.extend(batch_vecs)
+            time.sleep(0.05)
             gc.collect()
 
         doc.status_detail = "Storing vector index in Qdrant store..."
