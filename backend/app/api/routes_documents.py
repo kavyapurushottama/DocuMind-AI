@@ -51,8 +51,11 @@ def process_document(document_id: str) -> None:
         doc.status_detail = "Extracting text contents..."
         db.commit()
 
+        import gc
+
         extractor = EXTRACTORS[doc.file_type]
         pages = extractor.extract(doc.file_path)
+        gc.collect()
 
         if not pages:
             doc.status = DocumentStatus.FAILED
@@ -65,6 +68,7 @@ def process_document(document_id: str) -> None:
         db.commit()
 
         chunks = chunk_pages(pages)
+        gc.collect()
         if not chunks:
             doc.status = DocumentStatus.FAILED
             doc.status_detail = None
@@ -75,14 +79,16 @@ def process_document(document_id: str) -> None:
         doc.status_detail = f"Vectorizing {len(chunks)} text chunks..."
         db.commit()
 
-        # Batch embedding generation (32 chunks per batch) to keep memory usage under 50MB RAM even for 500-page documents
-        BATCH_SIZE = 32
+        # Batch embedding generation (16 chunks per batch) with aggressive gc.collect()
+        # to ensure RAM stays under 150MB on Render's 512MB free container
+        BATCH_SIZE = 16
         chunk_texts = [c.text for c in chunks]
         vectors = []
         for i in range(0, len(chunk_texts), BATCH_SIZE):
             batch = chunk_texts[i : i + BATCH_SIZE]
             batch_vecs = embedding_service.embed_texts(batch)
             vectors.extend(batch_vecs)
+            gc.collect()
 
         doc.status_detail = "Storing vector index in Qdrant store..."
         db.commit()
@@ -96,6 +102,7 @@ def process_document(document_id: str) -> None:
             chunk_indices=[c.chunk_index for c in chunks],
             vectors=vectors,
         )
+        gc.collect()
 
         doc.page_count = len(pages)
         doc.chunk_count = len(chunks)
@@ -111,6 +118,7 @@ def process_document(document_id: str) -> None:
             doc.error_message = str(e)[:500]
             db.commit()
     finally:
+        gc.collect()
         db.close()
 
 
