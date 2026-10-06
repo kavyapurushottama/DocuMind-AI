@@ -11,11 +11,12 @@ export default function UploadPage() {
   const { data: documents, isLoading } = useQuery({
     queryKey: ["documents"],
     queryFn: listDocuments,
+    staleTime: 5000,
     refetchInterval: (query) => {
       if (query.state.status === "error") return false;
       const docs = query.state.data as Awaited<ReturnType<typeof listDocuments>> | undefined;
       const stillWorking = docs?.some((d) => d.status === "pending" || d.status === "processing");
-      return stillWorking ? 5000 : false;
+      return stillWorking ? 10000 : false;
     },
   });
 

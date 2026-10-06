@@ -89,17 +89,18 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const [error, setError] = useState("");
 
-  const { data: stats, isLoading: isStatsLoading } = useQuery({ queryKey: ["dashboard"], queryFn: getDashboardStats });
-  const { data: conversations } = useQuery({ queryKey: ["conversations"], queryFn: listConversations });
+  const { data: stats, isLoading: isStatsLoading } = useQuery({ queryKey: ["dashboard"], queryFn: getDashboardStats, staleTime: 5000 });
+  const { data: conversations } = useQuery({ queryKey: ["conversations"], queryFn: listConversations, staleTime: 5000 });
 
   const { data: documents, isLoading: isDocsLoading } = useQuery({
     queryKey: ["documents"],
     queryFn: listDocuments,
+    staleTime: 5000,
     refetchInterval: (query) => {
       if (query.state.status === "error") return false;
       const docs = query.state.data as any[] | undefined;
       const stillWorking = docs?.some((d) => d.status === "pending" || d.status === "processing");
-      return stillWorking ? 5000 : false;
+      return stillWorking ? 10000 : false;
     },
   });
 
