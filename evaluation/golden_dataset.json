@@ -1,0 +1,255 @@
+{
+  "description": "DocuMind AI 30-Question Evaluation Benchmark Dataset",
+  "version": "1.0.0",
+  "total_questions": 30,
+  "metrics_tracked": [
+    "retrieval_precision_at_k",
+    "retrieval_recall_at_k",
+    "mean_reciprocal_rank",
+    "llm_judge_correctness",
+    "llm_judge_faithfulness"
+  ],
+  "questions": [
+    {
+      "id": "q01",
+      "document": "company_handbook.pdf",
+      "category": "factual_lookup",
+      "question": "What is the annual PTO allowance for employees with under two years of service?",
+      "ground_truth_context": "Employees with less than two consecutive years of full-time service accrue 18 days of paid time off (PTO) per calendar year, calculated at 1.5 days per month.",
+      "ground_truth_answer": "Employees with under two years of service accrue 18 days of PTO per calendar year (1.5 days per month)."
+    },
+    {
+      "id": "q02",
+      "document": "company_handbook.pdf",
+      "category": "factual_lookup",
+      "question": "By what date must unused wellness stipends be submitted for reimbursement?",
+      "ground_truth_context": "All health and wellness reimbursement requests must be submitted through the finance portal by December 15th of the active benefit plan year.",
+      "ground_truth_answer": "Reimbursement requests must be submitted by December 15th of the active plan year."
+    },
+    {
+      "id": "q03",
+      "document": "company_handbook.pdf",
+      "category": "policy_constraint",
+      "question": "Does unused parental leave roll over into the next calendar year?",
+      "ground_truth_context": "Parental leave must be taken within the first 12 months following birth or adoption and does not roll over into subsequent calendar years, nor is it eligible for cash-out upon termination.",
+      "ground_truth_answer": "No, parental leave does not roll over into subsequent calendar years and must be utilized within 12 months."
+    },
+    {
+      "id": "q04",
+      "document": "company_handbook.pdf",
+      "category": "procedural",
+      "question": "What steps are required to report an intellectual property conflict of interest?",
+      "ground_truth_context": "Employees encountering potential conflicts of interest must notify the Chief Legal Officer in writing within 5 business days and complete Form COI-3 via the compliance dashboard.",
+      "ground_truth_answer": "Notify the Chief Legal Officer in writing within 5 business days and complete Form COI-3 in the compliance dashboard."
+    },
+    {
+      "id": "q05",
+      "document": "architecture_system_spec.docx",
+      "category": "system_architecture",
+      "question": "Which database is used for session authentication and user account state?",
+      "ground_truth_context": "User authentication, hashed credentials, and multi-tenant workspace metadata are strictly persisted in PostgreSQL 16 using SQLAlchemy ORM.",
+      "ground_truth_answer": "PostgreSQL 16 using SQLAlchemy ORM."
+    },
+    {
+      "id": "q06",
+      "document": "architecture_system_spec.docx",
+      "category": "system_architecture",
+      "question": "What vector collection similarity metric is configured in Qdrant?",
+      "ground_truth_context": "Vector similarity search executes against the docmind_chunks collection in Qdrant, configured with Cosine distance indexing across 384-dimensional dense vectors.",
+      "ground_truth_answer": "Cosine distance indexing across 384-dimensional dense vectors."
+    },
+    {
+      "id": "q07",
+      "document": "architecture_system_spec.docx",
+      "category": "factual_lookup",
+      "question": "What is the token expiration window for JWT access tokens?",
+      "ground_truth_context": "Access tokens are signed using HMAC-SHA256 and configured with an expiration window of 1,440 minutes (24 hours).",
+      "ground_truth_answer": "1,440 minutes (24 hours)."
+    },
+    {
+      "id": "q08",
+      "document": "architecture_system_spec.docx",
+      "category": "system_architecture",
+      "question": "How are uploaded files isolated between different users in Qdrant vector storage?",
+      "ground_truth_context": "Multi-tenant payload filtering guarantees tenant isolation by indexing user_id and document_id fields within Qdrant payload filters on every query.",
+      "ground_truth_answer": "By indexing user_id and document_id payload filters on every query, enforcing tenant-level partition boundaries."
+    },
+    {
+      "id": "q09",
+      "document": "cloud_migration_sop.md",
+      "category": "procedural",
+      "question": "What pre-migration validation step must be run before migrating Redis cluster data?",
+      "ground_truth_context": "Before beginning Redis cluster data migration, engineers must verify cluster topology health with `redis-cli --cluster check` and execute a manual BGSAVE snapshot.",
+      "ground_truth_answer": "Engineers must verify cluster topology using `redis-cli --cluster check` and perform a manual BGSAVE snapshot."
+    },
+    {
+      "id": "q10",
+      "document": "cloud_migration_sop.md",
+      "category": "procedural",
+      "question": "What is the rollback SLA threshold if data replication lag exceeds 500ms?",
+      "ground_truth_context": "If replication lag exceeds 500ms for more than 3 consecutive evaluation cycles (90 seconds), the cutover must be aborted and DNS records flipped back to primary within 5 minutes.",
+      "ground_truth_answer": "The cutover must be aborted and DNS switched back within 5 minutes if replication lag exceeds 500ms for over 90 seconds."
+    },
+    {
+      "id": "q11",
+      "document": "cloud_migration_sop.md",
+      "category": "security_compliance",
+      "question": "What encryption standard is mandated for storage volumes during cloud migration?",
+      "ground_truth_context": "All persistent disk volumes and database snapshots in transit and at rest must enforce AES-256-GCM encryption with customer-managed keys (CMEK).",
+      "ground_truth_answer": "AES-256-GCM encryption with customer-managed keys (CMEK)."
+    },
+    {
+      "id": "q12",
+      "document": "ai_agent_framework_manual.txt",
+      "category": "factual_lookup",
+      "question": "What is the maximum allowed prompt context length for the Groq Qwen inference pipeline?",
+      "ground_truth_context": "The Groq inference integration targets qwen/qwen3.8-27b with a hard context limit configured at 8,192 input tokens and 2,048 maximum output tokens.",
+      "ground_truth_answer": "8,192 input tokens with 2,048 maximum output tokens."
+    },
+    {
+      "id": "q13",
+      "document": "ai_agent_framework_manual.txt",
+      "category": "error_handling",
+      "question": "What fallback model is triggered if Groq rate limits are exceeded?",
+      "ground_truth_context": "If the primary Groq endpoint triggers HTTP 429 rate limit exceptions, the service falls back automatically to Google Gemini 3.8 Flash before graceful degradation.",
+      "ground_truth_answer": "It automatically falls back to Google Gemini 3.8 Flash."
+    },
+    {
+      "id": "q14",
+      "document": "ai_agent_framework_manual.txt",
+      "category": "system_architecture",
+      "question": "Which local embedding model is used when running offline with Ollama?",
+      "ground_truth_context": "Offline embedding generation relies on nomic-embed-text served via local Ollama container at port 11434 with 384 embedding output dimensions.",
+      "ground_truth_answer": "nomic-embed-text served via Ollama at port 11434."
+    },
+    {
+      "id": "q15",
+      "document": "security_audit_report.pdf",
+      "category": "security_compliance",
+      "question": "What prompt injection defense mechanism is deployed in the request middleware?",
+      "ground_truth_context": "Incoming user prompts pass through guardrails.py regex heuristics checking for system prompt leakage attempts, jailbreak keywords, and DAN mode before reaching vector retrieval.",
+      "ground_truth_answer": "Heuristic regex validation in guardrails.py detecting jailbreak keywords, system prompt leakage, and DAN mode patterns."
+    },
+    {
+      "id": "q16",
+      "document": "security_audit_report.pdf",
+      "category": "security_compliance",
+      "question": "How are sensitive LLM API keys sanitized from log traces and user output?",
+      "ground_truth_context": "The sanitize_output filter matches Groq key patterns (gsk_*) and Gemini tokens (AIza*), masking them with [REDACTED_GROQ_KEY] and [REDACTED_GEMINI_KEY] respectively.",
+      "ground_truth_answer": "Via regex replacement that converts gsk_* to [REDACTED_GROQ_KEY] and AIza* to [REDACTED_GEMINI_KEY]."
+    },
+    {
+      "id": "q17",
+      "document": "api_developer_guide.md",
+      "category": "api_usage",
+      "question": "What HTTP status code is returned when a non-authenticated request hits /api/chat?",
+      "ground_truth_context": "All chat endpoints require a valid Bearer token in the Authorization header. Unauthenticated requests reject immediately with HTTP 401 Unauthorized.",
+      "ground_truth_answer": "HTTP 401 Unauthorized."
+    },
+    {
+      "id": "q18",
+      "document": "api_developer_guide.md",
+      "category": "api_usage",
+      "question": "What is the maximum allowed file upload size for documents in DocuMind AI?",
+      "ground_truth_context": "Document uploads are governed by MAX_UPLOAD_MB settings, enforcing an upper limit of 25 MB per individual file.",
+      "ground_truth_answer": "25 MB."
+    },
+    {
+      "id": "q19",
+      "document": "api_developer_guide.md",
+      "category": "api_usage",
+      "question": "Which file formats are supported for automatic text extraction?",
+      "ground_truth_context": "The extraction engine supports four primary file formats: PDF (.pdf), Microsoft Word (.docx), Plain Text (.txt), and Markdown (.md).",
+      "ground_truth_answer": "PDF (.pdf), Microsoft Word (.docx), Plain Text (.txt), and Markdown (.md)."
+    },
+    {
+      "id": "q20",
+      "document": "incident_response_runbook.docx",
+      "category": "procedural",
+      "question": "Who must be designated as Incident Commander for Severity 1 outages?",
+      "ground_truth_context": "For Severity 1 incidents, the on-call Site Reliability Engineering Lead assumes Incident Commander responsibilities until official escalation to the VP of Engineering.",
+      "ground_truth_answer": "The on-call Site Reliability Engineering (SRE) Lead."
+    },
+    {
+      "id": "q21",
+      "document": "incident_response_runbook.docx",
+      "category": "procedural",
+      "question": "Within how many hours must a post-incident review (PIR) document be drafted?",
+      "ground_truth_context": "The Incident Commander must circulate an initial post-incident review (PIR) draft within 48 hours of incident resolution.",
+      "ground_truth_answer": "Within 48 hours of incident resolution."
+    },
+    {
+      "id": "q22",
+      "document": "data_retention_policy.pdf",
+      "category": "policy_constraint",
+      "question": "What is the retention duration for deleted user workspace documents?",
+      "ground_truth_context": "Documents marked for deletion are soft-deleted for 30 days in postgres metadata before a nightly cleanup cron purges vector payloads and disk files permanently.",
+      "ground_truth_answer": "30 days soft-retention before automated permanent purging."
+    },
+    {
+      "id": "q23",
+      "document": "data_retention_policy.pdf",
+      "category": "policy_constraint",
+      "question": "Are anonymized telemetry logs retained indefinitely?",
+      "ground_truth_context": "Aggregated, non-PII operational telemetry and error frequency logs are retained in cold storage for a maximum duration of 365 days.",
+      "ground_truth_answer": "No, anonymized telemetry is stored for a maximum of 365 days (1 year)."
+    },
+    {
+      "id": "q24",
+      "document": "frontend_architecture.md",
+      "category": "frontend",
+      "question": "What React library renders DOCX file previews in the browser?",
+      "ground_truth_context": "Browser-based client-side preview for Microsoft Word files is rendered directly using the docx-preview package without server roundtrips.",
+      "ground_truth_answer": "The docx-preview package."
+    },
+    {
+      "id": "q25",
+      "document": "frontend_architecture.md",
+      "category": "frontend",
+      "question": "How are server states and cache invalidations handled on the frontend?",
+      "ground_truth_context": "Asynchronous document queries, upload status polling, and chat history caching are orchestrated via TanStack React Query v5.",
+      "ground_truth_answer": "TanStack React Query v5."
+    },
+    {
+      "id": "q26",
+      "document": "chunking_optimization_spec.md",
+      "category": "rag_tuning",
+      "question": "Why does reducing chunk size from 1200 to 500 characters improve retrieval precision for factual QA?",
+      "ground_truth_context": "Smaller chunk windows (500 chars with 100 char overlap) reduce semantic dilution and extraneous noise, ensuring dense vector embeddings map directly to specific factual statements rather than multi-topic paragraphs.",
+      "ground_truth_answer": "It minimizes semantic dilution and eliminates extraneous surrounding sentences, producing tighter vector representations focused on specific factual claims."
+    },
+    {
+      "id": "q27",
+      "document": "chunking_optimization_spec.md",
+      "category": "rag_tuning",
+      "question": "What risk occurs if chunk overlap is set to zero?",
+      "ground_truth_context": "Setting chunk overlap to zero causes boundary truncation, where sentences split at boundary edges lose syntactic context, resulting in retrieval recall drops of up to 28%.",
+      "ground_truth_answer": "Sentences and thoughts get severed at arbitrary boundaries, leading to lost context and sharp drops in retrieval recall."
+    },
+    {
+      "id": "q28",
+      "document": "knowledge_graph_spec.md",
+      "category": "knowledge_graph",
+      "question": "How does the knowledge graph supplement dense vector retrieval in DocuMind AI?",
+      "ground_truth_context": "While dense vector search excels at semantic similarity, the NetworkX knowledge graph resolves multi-hop relational dependencies between entities (e.g. Entity A operates Entity B in Region C) that span disparate chunks.",
+      "ground_truth_answer": "It captures relational entity-to-entity dependencies and multi-hop paths across disparate document chunks that semantic vector similarity alone misses."
+    },
+    {
+      "id": "q29",
+      "document": "knowledge_graph_spec.md",
+      "category": "knowledge_graph",
+      "question": "What structure is used by the LLM to output extracted knowledge graph triples?",
+      "ground_truth_context": "The extractor requires strict JSON formatting containing arrays of entities (id, label, category) and directed relations (source, target, relation_type, confidence).",
+      "ground_truth_answer": "A structured JSON object with entities (id, label, category) and directed relations (source, target, relation_type, confidence)."
+    },
+    {
+      "id": "q30",
+      "document": "evaluation_methodology.md",
+      "category": "evaluation",
+      "question": "How is the LLM-as-a-judge prompt structured to prevent evaluation hallucination?",
+      "ground_truth_context": "The LLM judge prompt uses binary checklist scoring with grounded reference anchoring, requiring the judge model to cite verbatim evidence from the ground truth answer before scoring.",
+      "ground_truth_answer": "It employs binary checklist scoring anchored by ground-truth reference excerpts and requires verbatim evidence citations before scoring."
+    }
+  ]
+}
+

@@ -60,6 +60,10 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Pre-load Fastembed model during application startup
+    import os
+    if os.environ.get("TESTING") == "1":
+        yield
+        return
     try:
         from app.services.embedding_service import _get_fastembed
         _get_fastembed()

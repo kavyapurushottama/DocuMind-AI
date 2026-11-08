@@ -1,0 +1,160 @@
+{
+  "benchmark_summary": {
+    "dataset_size": 30,
+    "baseline_config": {
+      "name": "Baseline (Chunk=1200, Overlap=100, Top-K=3)",
+      "chunk_size": 1200,
+      "chunk_overlap": 100,
+      "top_k": 3,
+      "enable_reranking": false
+    },
+    "tuned_config": {
+      "name": "Tuned (Chunk=500, Overlap=100, Top-K=5 + Reranking)",
+      "chunk_size": 500,
+      "chunk_overlap": 100,
+      "top_k": 5,
+      "enable_reranking": true
+    }
+  },
+  "metrics_comparison": {
+    "retrieval_precision_at_k": {
+      "baseline": "24.4%",
+      "tuned": "16.7%",
+      "delta": "-7.8%"
+    },
+    "retrieval_recall_at_k": {
+      "baseline": "73.3%",
+      "tuned": "83.3%",
+      "delta": "+10.0%"
+    },
+    "mean_reciprocal_rank_mrr": {
+      "baseline": 0.7,
+      "tuned": 0.8,
+      "delta": 0.1
+    },
+    "llm_judge_answer_correctness": {
+      "baseline": "73.3%",
+      "tuned": "83.3%",
+      "delta": "+10.0%"
+    },
+    "llm_judge_faithfulness": {
+      "baseline": "75.1%",
+      "tuned": "83.1%",
+      "delta": "+8.0%"
+    }
+  },
+  "baseline_detailed_sample": [
+    {
+      "id": "q01",
+      "question": "What is the annual PTO allowance for employees with under two years of service?",
+      "hit": true,
+      "rank": 1,
+      "precision": 0.333,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "correctness": 1.0,
+      "faithfulness": 0.996
+    },
+    {
+      "id": "q02",
+      "question": "By what date must unused wellness stipends be submitted for reimbursement?",
+      "hit": true,
+      "rank": 1,
+      "precision": 0.333,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "correctness": 1.0,
+      "faithfulness": 1.0
+    },
+    {
+      "id": "q03",
+      "question": "Does unused parental leave roll over into the next calendar year?",
+      "hit": true,
+      "rank": 1,
+      "precision": 0.333,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "correctness": 1.0,
+      "faithfulness": 1.0
+    },
+    {
+      "id": "q04",
+      "question": "What steps are required to report an intellectual property conflict of interest?",
+      "hit": false,
+      "rank": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "correctness": 0.0,
+      "faithfulness": 0.221
+    },
+    {
+      "id": "q05",
+      "question": "Which database is used for session authentication and user account state?",
+      "hit": true,
+      "rank": 1,
+      "precision": 0.333,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "correctness": 1.0,
+      "faithfulness": 0.983
+    }
+  ],
+  "tuned_detailed_sample": [
+    {
+      "id": "q01",
+      "question": "What is the annual PTO allowance for employees with under two years of service?",
+      "hit": true,
+      "rank": 1,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "correctness": 1.0,
+      "faithfulness": 0.996
+    },
+    {
+      "id": "q02",
+      "question": "By what date must unused wellness stipends be submitted for reimbursement?",
+      "hit": true,
+      "rank": 1,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "correctness": 1.0,
+      "faithfulness": 1.0
+    },
+    {
+      "id": "q03",
+      "question": "Does unused parental leave roll over into the next calendar year?",
+      "hit": true,
+      "rank": 1,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "correctness": 1.0,
+      "faithfulness": 1.0
+    },
+    {
+      "id": "q04",
+      "question": "What steps are required to report an intellectual property conflict of interest?",
+      "hit": true,
+      "rank": 1,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "correctness": 1.0,
+      "faithfulness": 1.0
+    },
+    {
+      "id": "q05",
+      "question": "Which database is used for session authentication and user account state?",
+      "hit": true,
+      "rank": 1,
+      "precision": 0.2,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "correctness": 1.0,
+      "faithfulness": 0.983
+    }
+  ]
+}

@@ -1,6 +1,13 @@
 """
 Tests for input sanitization, prompt injection defense, and secret redaction guardrails.
 """
+import os
+import sys
+
+BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+
 from app.core.guardrails import validate_and_sanitize_input, sanitize_output
 
 

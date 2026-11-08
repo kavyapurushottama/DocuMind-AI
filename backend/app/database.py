@@ -11,7 +11,7 @@ if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 
 def _init_engine(url: str):
-    connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
+    connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {"connect_timeout": 3}
     return create_engine(url, pool_pre_ping=True, connect_args=connect_args)
 
 try:

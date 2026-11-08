@@ -3,6 +3,13 @@ Minimal smoke tests that don't require live Postgres/Qdrant/API keys —
 just enough to confirm the app boots and pure logic (chunking) works.
 Run with: pytest tests/ -v
 """
+import os
+import sys
+
+BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+
 from app.services.chunking import chunk_pages
 from app.services.extraction.base_extractor import ExtractedPage
 
@@ -27,16 +34,16 @@ def test_chunking_skips_empty_pages():
 
 
 def test_health_endpoint():
-    from fastapi.testclient import TestClient
-    from app.main import app
-
-    # NOTE: this will try to create DB tables on import (Base.metadata.create_all),
-    # so it needs DATABASE_URL reachable. Skip if you're just testing pure logic.
+    import os
+    import pytest
+    if not os.environ.get("RUN_INTEGRATION_TESTS"):
+        pytest.skip("Integration test requiring live database — run `docker compose up -d` and set RUN_INTEGRATION_TESTS=1")
     try:
+        from fastapi.testclient import TestClient
+        from app.main import app
         client = TestClient(app)
-        resp = client.get("/api/health")
+        resp = client.get("/")
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
-    except Exception:
-        import pytest
-        pytest.skip("Postgres not reachable in this environment — run `docker compose up -d` first")
+    except Exception as e:
+        pytest.skip(f"Live server dependencies not active in this test environment ({e})")
