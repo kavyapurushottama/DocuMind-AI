@@ -1,6 +1,6 @@
 # DocuMind AI
 
-[![CI/CD Pipeline](https://github.com/your-username/documind-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/documind-ai/actions/workflows/ci.yml)
+
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Qdrant](https://img.shields.io/badge/Vector_DB-Qdrant-DC2626.svg?logo=qdrant&logoColor=white)](https://qdrant.tech)
 [![NetworkX](https://img.shields.io/badge/Knowledge_Graph-NetworkX-blue.svg)](https://networkx.org)
