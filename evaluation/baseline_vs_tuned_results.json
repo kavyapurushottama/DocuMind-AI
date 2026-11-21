@@ -1,46 +1,54 @@
 {
   "benchmark_summary": {
     "dataset_size": 30,
+    "embedding_model": "BAAI/bge-small-en-v1.5 (384-dim dense vectors)",
     "baseline_config": {
       "name": "Baseline (Chunk=1200, Overlap=100, Top-K=3)",
       "chunk_size": 1200,
       "chunk_overlap": 100,
       "top_k": 3,
-      "enable_reranking": false
+      "enable_reranking": false,
+      "use_dense_embeddings": true
     },
     "tuned_config": {
       "name": "Tuned (Chunk=500, Overlap=100, Top-K=5 + Reranking)",
       "chunk_size": 500,
       "chunk_overlap": 100,
       "top_k": 5,
-      "enable_reranking": true
+      "enable_reranking": true,
+      "use_dense_embeddings": true
     }
   },
   "metrics_comparison": {
     "retrieval_precision_at_k": {
-      "baseline": "24.4%",
-      "tuned": "16.7%",
-      "delta": "-7.8%"
+      "baseline": "33.3%",
+      "tuned": "20.0%",
+      "delta": "-13.3%"
     },
     "retrieval_recall_at_k": {
-      "baseline": "73.3%",
-      "tuned": "83.3%",
-      "delta": "+10.0%"
+      "baseline": "100.0%",
+      "tuned": "100.0%",
+      "delta": "+0.0%"
     },
     "mean_reciprocal_rank_mrr": {
-      "baseline": 0.7,
-      "tuned": 0.8,
-      "delta": 0.1
+      "baseline": 0.9833,
+      "tuned": 0.9833,
+      "delta": 0.0
     },
-    "llm_judge_answer_correctness": {
-      "baseline": "73.3%",
-      "tuned": "83.3%",
-      "delta": "+10.0%"
+    "citation_accuracy": {
+      "baseline": "96.7%",
+      "tuned": "96.7%",
+      "delta": "+0.0%"
     },
-    "llm_judge_faithfulness": {
-      "baseline": "75.1%",
-      "tuned": "83.1%",
-      "delta": "+8.0%"
+    "answer_correctness": {
+      "baseline": "100.0%",
+      "tuned": "100.0%",
+      "delta": "+0.0%"
+    },
+    "faithfulness": {
+      "baseline": "90.3%",
+      "tuned": "91.0%",
+      "delta": "+0.7%"
     }
   },
   "baseline_detailed_sample": [
@@ -52,6 +60,7 @@
       "precision": 0.333,
       "recall": 1.0,
       "mrr": 1.0,
+      "citation_accuracy": 1.0,
       "correctness": 1.0,
       "faithfulness": 0.996
     },
@@ -63,6 +72,7 @@
       "precision": 0.333,
       "recall": 1.0,
       "mrr": 1.0,
+      "citation_accuracy": 1.0,
       "correctness": 1.0,
       "faithfulness": 1.0
     },
@@ -74,19 +84,21 @@
       "precision": 0.333,
       "recall": 1.0,
       "mrr": 1.0,
+      "citation_accuracy": 1.0,
       "correctness": 1.0,
       "faithfulness": 1.0
     },
     {
       "id": "q04",
       "question": "What steps are required to report an intellectual property conflict of interest?",
-      "hit": false,
-      "rank": 0,
-      "precision": 0.0,
-      "recall": 0.0,
-      "mrr": 0.0,
-      "correctness": 0.0,
-      "faithfulness": 0.221
+      "hit": true,
+      "rank": 1,
+      "precision": 0.333,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "citation_accuracy": 1.0,
+      "correctness": 1.0,
+      "faithfulness": 1.0
     },
     {
       "id": "q05",
@@ -96,6 +108,7 @@
       "precision": 0.333,
       "recall": 1.0,
       "mrr": 1.0,
+      "citation_accuracy": 1.0,
       "correctness": 1.0,
       "faithfulness": 0.983
     }
@@ -109,6 +122,7 @@
       "precision": 0.2,
       "recall": 1.0,
       "mrr": 1.0,
+      "citation_accuracy": 1.0,
       "correctness": 1.0,
       "faithfulness": 0.996
     },
@@ -120,6 +134,7 @@
       "precision": 0.2,
       "recall": 1.0,
       "mrr": 1.0,
+      "citation_accuracy": 1.0,
       "correctness": 1.0,
       "faithfulness": 1.0
     },
@@ -131,6 +146,7 @@
       "precision": 0.2,
       "recall": 1.0,
       "mrr": 1.0,
+      "citation_accuracy": 1.0,
       "correctness": 1.0,
       "faithfulness": 1.0
     },
@@ -142,6 +158,7 @@
       "precision": 0.2,
       "recall": 1.0,
       "mrr": 1.0,
+      "citation_accuracy": 1.0,
       "correctness": 1.0,
       "faithfulness": 1.0
     },
@@ -153,6 +170,7 @@
       "precision": 0.2,
       "recall": 1.0,
       "mrr": 1.0,
+      "citation_accuracy": 1.0,
       "correctness": 1.0,
       "faithfulness": 0.983
     }

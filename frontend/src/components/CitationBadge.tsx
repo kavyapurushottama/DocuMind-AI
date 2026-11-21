@@ -30,10 +30,23 @@ function cleanSnippetText(text: string): string {
     .trim();
 }
 
-export default function CitationBadge({ citation, index }: { citation: Citation; index: number }) {
+interface CitationBadgeProps {
+  citation: Citation;
+  index: number;
+  onOpenCitation?: (citation: Citation) => void;
+}
+
+export default function CitationBadge({ citation, index, onOpenCitation }: CitationBadgeProps) {
   const [open, setOpen] = useState(false);
 
   const label = citation.page ? `Ref Page ${citation.page}` : "Ref Doc";
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onOpenCitation) {
+      onOpenCitation(citation);
+    }
+  };
 
   return (
     <div
@@ -43,14 +56,17 @@ export default function CitationBadge({ citation, index }: { citation: Citation;
     >
       <button
         type="button"
-        className={`mr-1 mb-1 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition cursor-default ${
+        onClick={handleClick}
+        title={citation.page ? `Click to view Page ${citation.page} in document` : "Click to view document"}
+        className={`mr-1 mb-1 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition cursor-pointer hover:scale-105 active:scale-95 ${
           open
             ? "border-accent bg-accent text-white shadow-glow"
-            : "border-accent/20 bg-accentSoft text-accent"
+            : "border-accent/30 bg-accentSoft text-accent hover:border-accent hover:bg-accent hover:text-white"
         }`}
       >
         <span>📄</span>
         <span className="font-display font-semibold">{label}</span>
+        <span className="text-[10px] opacity-70">↗</span>
       </button>
 
       {open && (
@@ -65,18 +81,31 @@ export default function CitationBadge({ citation, index }: { citation: Citation;
             <div className="min-w-0">
               <p className="text-xs font-semibold text-ink truncate">{citation.filename}</p>
               {citation.page && (
-                <p className="text-[11px] text-t3">Page {citation.page}</p>
+                <p className="text-[11px] text-t3 font-medium">Page {citation.page}</p>
               )}
             </div>
           </div>
 
           {/* Snippet */}
-          <p className="mt-3 text-xs leading-relaxed text-t2 italic">
+          <p className="mt-3 text-xs leading-relaxed text-t2 italic line-clamp-4">
             "{cleanSnippetText(citation.snippet)}"
           </p>
 
           {/* Confidence bar */}
           <ConfidenceBar score={citation.score} />
+
+          {/* 1-Click Jump Button */}
+          {onOpenCitation && (
+            <button
+              type="button"
+              onClick={handleClick}
+              className="mt-3 w-full rounded-xl bg-accentSoft py-1.5 text-center text-xs font-semibold text-accent transition hover:bg-accent hover:text-white flex items-center justify-center gap-1.5"
+            >
+              <span>View in Document</span>
+              {citation.page ? `(Page ${citation.page})` : ""}
+              <span>↗</span>
+            </button>
+          )}
         </div>
       )}
     </div>

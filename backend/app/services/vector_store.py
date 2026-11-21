@@ -1,9 +1,16 @@
 """
-Thin wrapper around Qdrant with automatic embedded local storage fallback.
-If remote Qdrant credentials are invalid (e.g. 403 Forbidden), it seamlessly
-uses embedded local disk storage (./qdrant_data) so document ingestion and search
-NEVER fail.
+Qdrant vector-store wrapper.
+
+Development:
+- Uses embedded local storage when QDRANT_URL is blank or points to localhost.
+- Can connect to a remote Qdrant instance when configured.
+
+Production:
+- Requires a remote Qdrant URL and API key.
+- Never falls back to local disk.
+- Propagates connection and operation failures instead of hiding them.
 """
+
 import logging
 import uuid
 
@@ -13,47 +20,105 @@ from qdrant_client.http import models as qmodels
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
 _client: QdrantClient | None = None
 
 
-def get_client(force_local: bool = False) -> QdrantClient:
+def _is_production() -> bool:
+    return settings.ENVIRONMENT.strip().lower() == "production"
+
+
+def _is_local_url(url: str) -> bool:
+    normalized = url.strip().lower()
+    return (
+        not normalized
+        or "localhost" in normalized
+        or "127.0.0.1" in normalized
+    )
+
+
+def get_client() -> QdrantClient:
+    """
+    Return the configured Qdrant client.
+
+    Production must use remote Qdrant with an API key.
+    Local embedded storage is permitted only outside production.
+    """
     global _client
-    if force_local:
+
+    if _client is not None:
+        return _client
+
+    url = settings.QDRANT_URL.strip()
+    api_key = settings.QDRANT_API_KEY.strip()
+
+    if _is_production():
+        if not url or _is_local_url(url):
+            raise RuntimeError(
+                "Production requires a remote QDRANT_URL. "
+                "Local or embedded Qdrant is not permitted."
+            )
+
+        if not api_key:
+            raise RuntimeError(
+                "Production requires QDRANT_API_KEY."
+            )
+
+    # Development can use the existing embedded local database.
+    if _is_local_url(url) and not api_key:
+        logger.info(
+            "Using embedded local Qdrant storage at ./qdrant_data"
+        )
         _client = QdrantClient(path="./qdrant_data")
         return _client
 
-    if _client is None:
-        try:
-            if settings.QDRANT_URL and "localhost" not in settings.QDRANT_URL and settings.QDRANT_API_KEY:
-                api_key = settings.QDRANT_API_KEY
-                _client = QdrantClient(url=settings.QDRANT_URL, api_key=api_key)
-            else:
-                logger.info("Using embedded local Qdrant vector store (./qdrant_data)...")
-                _client = QdrantClient(path="./qdrant_data")
-        except Exception as e:
-            logger.warning(f"Failed to initialize remote Qdrant ({e}). Using embedded local Qdrant...")
-            _client = QdrantClient(path="./qdrant_data")
-    return _client
+    # A configured remote endpoint is used directly.
+    try:
+        remote_client = QdrantClient(
+            url=url,
+            api_key=api_key or None,
+            timeout=15,
+        )
+
+        # Verify connectivity before caching the client.
+        remote_client.get_collections()
+
+        _client = remote_client
+        logger.info("Successfully connected to remote Qdrant.")
+        return _client
+
+    except Exception:
+        logger.exception(
+            "Could not connect to the configured Qdrant instance."
+        )
+        raise
 
 
 def ensure_collection(vector_size: int = 384) -> None:
+    if vector_size <= 0:
+        raise ValueError("vector_size must be greater than zero.")
+
     client = get_client()
-    try:
-        collections = [c.name for c in client.get_collections().collections]
-        if settings.QDRANT_COLLECTION not in collections:
-            client.create_collection(
-                collection_name=settings.QDRANT_COLLECTION,
-                vectors_config=qmodels.VectorParams(size=vector_size, distance=qmodels.Distance.COSINE),
-            )
-    except Exception as e:
-        logger.warning(f"Remote Qdrant collection check failed ({e}). Switching to embedded local Qdrant...")
-        client = get_client(force_local=True)
-        collections = [c.name for c in client.get_collections().collections]
-        if settings.QDRANT_COLLECTION not in collections:
-            client.create_collection(
-                collection_name=settings.QDRANT_COLLECTION,
-                vectors_config=qmodels.VectorParams(size=vector_size, distance=qmodels.Distance.COSINE),
-            )
+
+    collections = [
+        collection.name
+        for collection in client.get_collections().collections
+    ]
+
+    if settings.QDRANT_COLLECTION not in collections:
+        logger.info(
+            "Creating Qdrant collection '%s' with vector size %s.",
+            settings.QDRANT_COLLECTION,
+            vector_size,
+        )
+
+        client.create_collection(
+            collection_name=settings.QDRANT_COLLECTION,
+            vectors_config=qmodels.VectorParams(
+                size=vector_size,
+                distance=qmodels.Distance.COSINE,
+            ),
+        )
 
 
 def upsert_chunks(
@@ -67,13 +132,46 @@ def upsert_chunks(
 ) -> None:
     if not vectors:
         return
-    ensure_collection(vector_size=len(vectors[0]))
+
+    lengths = {
+        len(chunk_texts),
+        len(chunk_pages),
+        len(chunk_indices),
+        len(vectors),
+    }
+
+    if len(lengths) != 1:
+        raise ValueError(
+            "chunk_texts, chunk_pages, chunk_indices, and vectors "
+            "must all contain the same number of items."
+        )
+
+    vector_size = len(vectors[0])
+
+    if vector_size == 0:
+        raise ValueError("Embedding vectors cannot be empty.")
+
+    if any(len(vector) != vector_size for vector in vectors):
+        raise ValueError(
+            "All embedding vectors must have the same dimensions."
+        )
+
+    ensure_collection(vector_size=vector_size)
     client = get_client()
+
     points = []
-    for text, page, idx, vector in zip(chunk_texts, chunk_pages, chunk_indices, vectors):
+
+    for text, page, idx, vector in zip(
+        chunk_texts,
+        chunk_pages,
+        chunk_indices,
+        vectors,
+    ):
+        # Deterministic UUID prevents duplicate chunk points if ingestion is retried
+        point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{document_id}_{idx}"))
         points.append(
             qmodels.PointStruct(
-                id=str(uuid.uuid4()),
+                id=point_id,
                 vector=vector,
                 payload={
                     "document_id": document_id,
@@ -85,13 +183,18 @@ def upsert_chunks(
                 },
             )
         )
-    try:
-        client.upsert(collection_name=settings.QDRANT_COLLECTION, points=points)
-    except Exception as e:
-        logger.warning(f"Upsert to primary Qdrant failed ({e}). Retrying with embedded local Qdrant...")
-        client = get_client(force_local=True)
-        ensure_collection(vector_size=len(vectors[0]))
-        client.upsert(collection_name=settings.QDRANT_COLLECTION, points=points)
+
+    # Errors deliberately propagate. Never retry against local storage.
+    client.upsert(
+        collection_name=settings.QDRANT_COLLECTION,
+        points=points,
+    )
+
+    logger.info(
+        "Stored %s chunks for document %s.",
+        len(points),
+        document_id,
+    )
 
 
 def search(
@@ -100,119 +203,125 @@ def search(
     document_id: str | None = None,
     top_k: int = 5,
 ) -> list[dict]:
+    if top_k <= 0:
+        return []
+
     client = get_client()
-    must_filters = [qmodels.FieldCondition(key="user_id", match=qmodels.MatchValue(value=user_id))]
+
+    must_filters = [
+        qmodels.FieldCondition(
+            key="user_id",
+            match=qmodels.MatchValue(value=user_id),
+        )
+    ]
+
     if document_id:
-        must_filters.append(qmodels.FieldCondition(key="document_id", match=qmodels.MatchValue(value=document_id)))
+        must_filters.append(
+            qmodels.FieldCondition(
+                key="document_id",
+                match=qmodels.MatchValue(value=document_id),
+            )
+        )
 
-    results = []
-    try:
-        results = client.query_points(
-            collection_name=settings.QDRANT_COLLECTION,
-            query=query_vector,
-            query_filter=qmodels.Filter(must=must_filters),
-            limit=top_k,
-            with_payload=True,
-        ).points
-    except Exception as e:
-        logger.warning(f"Search on primary Qdrant failed ({e}). Searching embedded local Qdrant...")
-
-    if not results:
-        try:
-            local_client = QdrantClient(path="./qdrant_data")
-            collections = [c.name for c in local_client.get_collections().collections]
-            if settings.QDRANT_COLLECTION in collections:
-                results = local_client.query_points(
-                    collection_name=settings.QDRANT_COLLECTION,
-                    query=query_vector,
-                    query_filter=qmodels.Filter(must=must_filters),
-                    limit=top_k,
-                    with_payload=True,
-                ).points
-        except Exception as e:
-            logger.warning(f"Embedded local Qdrant search check error: {e}")
+    # A successful empty result is returned as empty.
+    # It does not trigger a search against another database.
+    results = client.query_points(
+        collection_name=settings.QDRANT_COLLECTION,
+        query=query_vector,
+        query_filter=qmodels.Filter(must=must_filters),
+        limit=top_k,
+        with_payload=True,
+    ).points
 
     return [
         {
-            "score": r.score,
-            "text": r.payload["text"],
-            "filename": r.payload["filename"],
-            "page": r.payload.get("page"),
-            "chunk_index": r.payload.get("chunk_index"),
-            "document_id": r.payload.get("document_id"),
-            "chunk_id": str(r.id),
+            "score": result.score,
+            "text": result.payload.get("text", ""),
+            "filename": result.payload.get("filename", ""),
+            "page": result.payload.get("page"),
+            "chunk_index": result.payload.get("chunk_index"),
+            "document_id": result.payload.get("document_id"),
+            "chunk_id": str(result.id),
         }
-        for r in results
+        for result in results
     ]
 
 
-def delete_document_chunks(document_id: str) -> None:
+
+def delete_document_chunks(document_id: str, user_id: str) -> None:
+    """Delete vector chunks belonging to a specific user's document."""
     client = get_client()
-    try:
-        client.delete(
-            collection_name=settings.QDRANT_COLLECTION,
-            points_selector=qmodels.FilterSelector(
-                filter=qmodels.Filter(
-                    must=[qmodels.FieldCondition(key="document_id", match=qmodels.MatchValue(value=document_id))]
-                )
-            ),
-        )
-    except Exception as e:
-        logger.warning(f"Delete on primary Qdrant failed ({e}). Deleting from embedded local Qdrant...")
-        client = get_client(force_local=True)
-        try:
-            client.delete(
-                collection_name=settings.QDRANT_COLLECTION,
-                points_selector=qmodels.FilterSelector(
-                    filter=qmodels.Filter(
-                        must=[qmodels.FieldCondition(key="document_id", match=qmodels.MatchValue(value=document_id))]
-                    )
-                ),
+
+    client.delete(
+        collection_name=settings.QDRANT_COLLECTION,
+        points_selector=qmodels.FilterSelector(
+            filter=qmodels.Filter(
+                must=[
+                    qmodels.FieldCondition(
+                        key="document_id",
+                        match=qmodels.MatchValue(value=document_id),
+                    ),
+                    qmodels.FieldCondition(
+                        key="user_id",
+                        match=qmodels.MatchValue(value=user_id),
+                    ),
+                ]
             )
-        except Exception:
-            pass
+        ),
+    )
+
+    logger.info(
+        "Deleted vector chunks for document %s belonging to user %s.",
+        document_id,
+        user_id,
+    )
 
 
-def get_all_user_chunks(user_id: str, document_id: str | None = None, limit: int = 5) -> list[dict]:
-    """Retrieves top document chunks for summary or fallback operations without relying on query vector similarity."""
+def get_all_user_chunks(
+    user_id: str,
+    document_id: str | None = None,
+    limit: int = 5,
+) -> list[dict]:
+    """
+    Retrieve document chunks without vector similarity ranking.
+    Used by summary and fallback operations.
+    """
+    if limit <= 0:
+        return []
+
     client = get_client()
-    must_filters = [qmodels.FieldCondition(key="user_id", match=qmodels.MatchValue(value=user_id))]
+
+    must_filters = [
+        qmodels.FieldCondition(
+            key="user_id",
+            match=qmodels.MatchValue(value=user_id),
+        )
+    ]
+
     if document_id:
-        must_filters.append(qmodels.FieldCondition(key="document_id", match=qmodels.MatchValue(value=document_id)))
-
-    points = []
-    try:
-        res, _ = client.scroll(
-            collection_name=settings.QDRANT_COLLECTION,
-            scroll_filter=qmodels.Filter(must=must_filters),
-            limit=limit,
-            with_payload=True,
-        )
-        points = res
-    except Exception as e:
-        logger.warning(f"Scroll on primary Qdrant failed ({e}). Scrolling local Qdrant...")
-        try:
-            local_client = QdrantClient(path="./qdrant_data")
-            res, _ = local_client.scroll(
-                collection_name=settings.QDRANT_COLLECTION,
-                scroll_filter=qmodels.Filter(must=must_filters),
-                limit=limit,
-                with_payload=True,
+        must_filters.append(
+            qmodels.FieldCondition(
+                key="document_id",
+                match=qmodels.MatchValue(value=document_id),
             )
-            points = res
-        except Exception:
-            pass
+        )
+
+    points, _ = client.scroll(
+        collection_name=settings.QDRANT_COLLECTION,
+        scroll_filter=qmodels.Filter(must=must_filters),
+        limit=limit,
+        with_payload=True,
+    )
 
     return [
         {
             "score": 1.0,
-            "text": p.payload["text"],
-            "filename": p.payload["filename"],
-            "page": p.payload.get("page"),
-            "chunk_index": p.payload.get("chunk_index"),
-            "document_id": p.payload.get("document_id"),
-            "chunk_id": str(p.id),
+            "text": point.payload.get("text", ""),
+            "filename": point.payload.get("filename", ""),
+            "page": point.payload.get("page"),
+            "chunk_index": point.payload.get("chunk_index"),
+            "document_id": point.payload.get("document_id"),
+            "chunk_id": str(point.id),
         }
-        for p in points
+        for point in points
     ]
-

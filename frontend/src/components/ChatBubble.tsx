@@ -1,4 +1,4 @@
-import { ChatMessage } from "../types";
+import { ChatMessage, Citation } from "../types";
 import CitationBadge from "./CitationBadge";
 
 function timeAgo(iso: string) {
@@ -88,7 +88,13 @@ function FormattedText({ text }: { text: string }) {
   );
 }
 
-export default function ChatBubble({ message }: { message: ChatMessage }) {
+export default function ChatBubble({
+  message,
+  onOpenCitation,
+}: {
+  message: ChatMessage;
+  onOpenCitation?: (citation: Citation) => void;
+}) {
   const isUser = message.role === "user";
 
   return (
@@ -126,7 +132,12 @@ export default function ChatBubble({ message }: { message: ChatMessage }) {
           return (
             <div className="flex flex-wrap gap-1">
               {uniqueCitations.map((c, i) => (
-                <CitationBadge key={c.chunk_id} citation={c} index={i} />
+                <CitationBadge
+                  key={c.chunk_id}
+                  citation={c}
+                  index={i}
+                  onOpenCitation={onOpenCitation}
+                />
               ))}
             </div>
           );
