@@ -78,10 +78,11 @@ flowchart TD
     EXTRACT --> CACHE
 
     GUARD -->|Chat Query| ROUTER
-    ROUTER -->|Dense Search (Tenant Scoped)| QDRANT
+    ROUTER -->|Dense Search| QDRANT
     ROUTER -->|Relational Triples| NX
     PG -->|Rebuild on Demand| NX
-    QDRANT & NX --> SYNTH
+    QDRANT --> SYNTH
+    NX --> SYNTH
     SYNTH --> SSE --> UI
 ```
 
