@@ -1,10 +1,10 @@
 import uuid
 from datetime import datetime, timezone
+import enum
 
-from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Enum
+from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Enum, LargeBinary
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-import enum
 
 from app.database import Base
 
@@ -47,3 +47,18 @@ class Document(Base):
 
     user = relationship("User")
     workspace = relationship("Workspace")
+    file_record = relationship("DocumentFile", back_populates="document", uselist=False, cascade="all, delete-orphan")
+    entities = relationship("DocumentEntity", back_populates="document", cascade="all, delete-orphan")
+    relationships = relationship("DocumentRelationship", back_populates="document", cascade="all, delete-orphan")
+
+
+class DocumentFile(Base):
+    """Stores persistent raw binary file bytes in PostgreSQL for survive-restart persistence."""
+    __tablename__ = "document_files"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    file_data = Column(LargeBinary, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    document = relationship("Document", back_populates="file_record")

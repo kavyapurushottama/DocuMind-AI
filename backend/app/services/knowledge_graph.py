@@ -299,3 +299,84 @@ class DocumentKnowledgeGraph:
 
         return "Knowledge Graph Relational Context:\n" + "\n".join(triples[:8])
 
+
+# ---------------------------------------------------------------------------
+# Tenant Graph Cache & Database Persistence
+# ---------------------------------------------------------------------------
+
+class KnowledgeGraphDBError(RuntimeError):
+    """Raised when querying the knowledge graph database tables fails."""
+    pass
+
+
+# In-memory tenant graph cache
+_user_graphs: dict[str, DocumentKnowledgeGraph] = {}
+
+
+def invalidate_user_graph_cache(user_id: str) -> None:
+    """Evicts a user's cached in-memory graph so subsequent queries reload authoritative data from PostgreSQL."""
+    _user_graphs.pop(str(user_id), None)
+
+
+def load_user_graph_from_db(user_id: str, db: Any) -> DocumentKnowledgeGraph:
+    """
+    Loads all persisted entities and relations for a user from PostgreSQL into a NetworkX graph.
+    Propagates database errors so infrastructure failures are not confused with empty knowledge.
+    """
+    import uuid
+    try:
+        uid = uuid.UUID(user_id) if isinstance(user_id, str) else user_id
+    except Exception as e:
+        raise ValueError(f"Invalid user_id for knowledge graph: {user_id}") from e
+
+    try:
+        from app.models.knowledge_graph import DocumentEntity, DocumentRelationship
+        entities = db.query(DocumentEntity).filter(DocumentEntity.user_id == uid).all()
+        relations = db.query(DocumentRelationship).filter(DocumentRelationship.user_id == uid).all()
+    except Exception as e:
+        logger.error("Database query failed while loading knowledge graph for user %s: %s", user_id, e)
+        raise KnowledgeGraphDBError(f"Database error loading knowledge graph for user {user_id}: {e}") from e
+
+    kg = DocumentKnowledgeGraph()
+    for ent in entities:
+        kg.graph.add_node(
+            ent.entity_key,
+            label=ent.label,
+            category=ent.category or "Concept",
+            description=ent.description or "",
+        )
+
+    for rel in relations:
+        if not kg.graph.has_node(rel.source_key):
+            kg.graph.add_node(rel.source_key, label=rel.source_key, category="Unknown")
+        if not kg.graph.has_node(rel.target_key):
+            kg.graph.add_node(rel.target_key, label=rel.target_key, category="Unknown")
+        kg.graph.add_edge(
+            rel.source_key,
+            rel.target_key,
+            relation=rel.relation,
+            confidence=rel.confidence or 1.0,
+        )
+
+    return kg
+
+
+def get_user_graph(user_id: str, db: Any = None) -> DocumentKnowledgeGraph:
+    """
+    Returns the DocumentKnowledgeGraph instance scoped to a specific tenant/user.
+    Loads entities and relationships deterministically from PostgreSQL.
+    Propagates database errors instead of silently masking them as empty graphs.
+    """
+    if db is not None:
+        kg = load_user_graph_from_db(user_id, db)
+        _user_graphs[user_id] = kg
+        return kg
+
+    if user_id in _user_graphs:
+        return _user_graphs[user_id]
+
+    from app.database import SessionLocal
+    with SessionLocal() as session:
+        kg = load_user_graph_from_db(user_id, session)
+        _user_graphs[user_id] = kg
+        return kg

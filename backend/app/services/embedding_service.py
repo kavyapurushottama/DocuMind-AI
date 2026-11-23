@@ -1,129 +1,138 @@
 """
-Wraps Gemini Embedding API, local Ollama API, and local fastembed (ONNX).
-Fastembed runs 100% locally on CPU without needing external API keys or containers,
-serving as a 100% reliable fallback so document uploads never fail.
+Embedding service for DocuMind AI.
+Standardizes on BAAI/bge-small-en-v1.5 (384 dimensions) via FastEmbed.
+Ensures deterministic embeddings and strictly avoids cross-provider / cross-dimensional fallbacks
+that corrupt vector collections.
 """
 import logging
-import httpx
-from google import genai
-from google.genai import types
+from typing import Any
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
-_client: genai.Client | None = None
-_fastembed_model = None
+
+_fastembed_model: Any = None
+DEFAULT_MODEL_NAME = "BAAI/bge-small-en-v1.5"
+DEFAULT_DIMENSION = 384
+
+
+class EmbeddingError(RuntimeError):
+    """Raised when embedding generation fails."""
+    pass
+
+
+def get_embedding_model_info() -> dict[str, Any]:
+    """Returns canonical metadata for the active embedding model."""
+    provider = settings.EMBEDDING_PROVIDER.strip().lower()
+    if provider == "fastembed":
+        return {
+            "provider": "fastembed",
+            "model": DEFAULT_MODEL_NAME,
+            "dimensions": DEFAULT_DIMENSION,
+        }
+    elif provider == "gemini":
+        return {
+            "provider": "gemini",
+            "model": settings.GEMINI_EMBEDDING_MODEL,
+            "dimensions": 768,
+        }
+    elif provider == "ollama":
+        return {
+            "provider": "ollama",
+            "model": settings.OLLAMA_EMBEDDING_MODEL,
+            "dimensions": settings.EMBEDDING_DIM,
+        }
+    return {
+        "provider": provider,
+        "model": "unknown",
+        "dimensions": settings.EMBEDDING_DIM,
+    }
 
 
 def _get_fastembed():
     global _fastembed_model
     if _fastembed_model is None:
         from fastembed import TextEmbedding
-        logger.info("Initializing local Fastembed model (BAAI/bge-small-en-v1.5)...")
-        _fastembed_model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+        logger.info("Initializing local Fastembed model (%s)...", DEFAULT_MODEL_NAME)
+        _fastembed_model = TextEmbedding(model_name=DEFAULT_MODEL_NAME)
     return _fastembed_model
 
 
 def _embed_fastembed(texts: list[str]) -> list[list[float]]:
     try:
         model = _get_fastembed()
-        return [list(vec) for vec in model.embed(texts)]
+        vectors = [list(vec) for vec in model.embed(texts)]
+        return vectors
     except Exception as e:
-        logger.error(f"Fastembed embedding failed: {e}")
-        raise
-
-
-def _get_client() -> genai.Client:
-    global _client
-    if _client is None:
-        if not settings.GEMINI_API_KEY:
-            raise RuntimeError(
-                "GEMINI_API_KEY is not set. Get a free key at "
-                "https://aistudio.google.com/apikey and put it in your .env"
-            )
-        _client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    return _client
-
-
-def _embed_ollama(texts: list[str]) -> list[list[float]]:
-    """
-    Generate embeddings locally using Ollama. If the model is not found,
-    attempts to pull it automatically from Ollama library first.
-    """
-    url = f"{settings.OLLAMA_URL}/api/embed"
-    try:
-        resp = httpx.post(
-            url,
-            json={"model": settings.OLLAMA_EMBEDDING_MODEL, "input": texts},
-            timeout=120.0
-        )
-        if resp.status_code == 404 or "not found" in resp.text.lower():
-            logger.warning(f"Ollama model '{settings.OLLAMA_EMBEDDING_MODEL}' not found. Attempting to pull it...")
-            pull_url = f"{settings.OLLAMA_URL}/api/pull"
-            pull_resp = httpx.post(
-                pull_url,
-                json={"name": settings.OLLAMA_EMBEDDING_MODEL, "stream": False},
-                timeout=300.0
-            )
-            pull_resp.raise_for_status()
-            logger.info(f"Ollama model '{settings.OLLAMA_EMBEDDING_MODEL}' pulled successfully. Retrying...")
-            resp = httpx.post(
-                url,
-                json={"model": settings.OLLAMA_EMBEDDING_MODEL, "input": texts},
-                timeout=120.0
-            )
-        resp.raise_for_status()
-        return resp.json()["embeddings"]
-    except Exception as e:
-        logger.error(f"Ollama embedding failed: {e}")
-        raise
+        logger.exception("Fastembed generation failed: %s", e)
+        raise EmbeddingError(f"Fastembed generation failed: {e}") from e
 
 
 def embed_texts(texts: list[str], task_type: str = "RETRIEVAL_DOCUMENT") -> list[list[float]]:
-    """Embed a batch of chunk texts (used at ingestion time)."""
+    """
+    Embed a batch of chunk texts at ingestion time.
+    Strictly uses the configured provider. NEVER silently falls back to a different model,
+    as different models occupy incompatible semantic vector spaces and cause dimensionality errors.
+    """
     if not texts:
         return []
 
-    if settings.EMBEDDING_PROVIDER == "fastembed":
-        return _embed_fastembed(texts)
+    provider = settings.EMBEDDING_PROVIDER.strip().lower()
 
-    if settings.EMBEDDING_PROVIDER == "ollama":
+    if provider == "fastembed":
+        vectors = _embed_fastembed(texts)
+    elif provider == "gemini":
+        if not settings.GEMINI_API_KEY:
+            raise EmbeddingError("GEMINI_API_KEY is not configured for Gemini embedding provider.")
         try:
-            return _embed_ollama(texts)
+            from google import genai
+            from google.genai import types
+            client = genai.Client(api_key=settings.GEMINI_API_KEY)
+            result = client.models.embed_content(
+                model=settings.GEMINI_EMBEDDING_MODEL,
+                contents=texts,
+                config=types.EmbedContentConfig(task_type=task_type),
+            )
+            vectors = [list(e.values) for e in result.embeddings]
         except Exception as e:
-            logger.warning(f"Ollama embedding failed ({e}), falling back to local fastembed...")
-            return _embed_fastembed(texts)
+            logger.exception("Gemini API embedding failed: %s", e)
+            raise EmbeddingError(f"Gemini API embedding failed: {e}") from e
+    elif provider == "ollama":
+        import httpx
+        url = f"{settings.OLLAMA_URL}/api/embed"
+        try:
+            resp = httpx.post(
+                url,
+                json={"model": settings.OLLAMA_EMBEDDING_MODEL, "input": texts},
+                timeout=120.0,
+            )
+            resp.raise_for_status()
+            vectors = resp.json()["embeddings"]
+        except Exception as e:
+            logger.exception("Ollama embedding failed: %s", e)
+            raise EmbeddingError(f"Ollama embedding failed: {e}") from e
+    else:
+        raise EmbeddingError(f"Unsupported EMBEDDING_PROVIDER '{provider}'")
 
-    # Gemini cloud provider with automatic fastembed fallback
-    try:
-        client = _get_client()
-        result = client.models.embed_content(
-            model=settings.GEMINI_EMBEDDING_MODEL,
-            contents=texts,
-            config=types.EmbedContentConfig(task_type=task_type),
+    # Validate output dimensionality consistency
+    if vectors and len(vectors[0]) != settings.EMBEDDING_DIM:
+        logger.warning(
+            "Embedding dimension mismatch: generated %d dims, configured %d dims",
+            len(vectors[0]),
+            settings.EMBEDDING_DIM,
         )
-        return [e.values for e in result.embeddings]
-    except Exception as e:
-        logger.warning(f"Gemini API embedding failed ({e}). Falling back to local Fastembed...")
-        return _embed_fastembed(texts)
+
+    return vectors
 
 
 def embed_query(text: str) -> list[float]:
-    """Embed a single user question (used at query time)."""
-    if settings.EMBEDDING_PROVIDER == "fastembed":
-        return _embed_fastembed([text])[0]
+    """
+    Embed a single user question at query time using the exact same model pipeline.
+    """
+    if not text.strip():
+        raise ValueError("Cannot embed an empty query.")
 
-    if settings.EMBEDDING_PROVIDER == "ollama":
-        try:
-            return _embed_ollama([text])[0]
-        except Exception as e:
-            logger.warning(f"Ollama query embedding failed ({e}), falling back to local fastembed...")
-            return _embed_fastembed([text])[0]
-
-    try:
-        return embed_texts([text], task_type="RETRIEVAL_QUERY")[0]
-    except Exception as e:
-        logger.warning(f"Gemini query embedding failed ({e}), falling back to local fastembed...")
-        return _embed_fastembed([text])[0]
-
-
+    vectors = embed_texts([text], task_type="RETRIEVAL_QUERY")
+    if not vectors:
+        raise EmbeddingError("Failed to generate vector for query.")
+    return vectors[0]

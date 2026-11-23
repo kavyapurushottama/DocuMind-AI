@@ -11,6 +11,7 @@ class Citation(BaseModel):
     chunk_id: str
     snippet: str
     score: float
+    document_id: str | None = None
 
 
 class AskRequest(BaseModel):

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { askQuestion, getConversation, listConversations, deleteConversation, pinConversation } from "../api/chat";
+import { askQuestion, askQuestionStream, getConversation, listConversations, deleteConversation, pinConversation } from "../api/chat";
 import { listDocuments, downloadDocument } from "../api/documents";
 import { apiClient } from "../api/client";
 // @ts-ignore
@@ -113,9 +113,10 @@ interface DocumentViewerModalProps {
   isOpen: boolean;
   onClose: () => void;
   activeDoc: { id: string; filename: string } | null;
+  targetPage?: number | null;
 }
 
-function DocumentViewerModal({ isOpen, onClose, activeDoc }: DocumentViewerModalProps) {
+function DocumentViewerModal({ isOpen, onClose, activeDoc, targetPage }: DocumentViewerModalProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [docxBlob, setDocxBlob] = useState<Blob | null>(null);
   const [loading, setLoading] = useState(false);
@@ -247,7 +248,7 @@ function DocumentViewerModal({ isOpen, onClose, activeDoc }: DocumentViewerModal
             </div>
           ) : previewUrl ? (
             <iframe
-              src={previewUrl}
+              src={targetPage ? `${previewUrl}#page=${targetPage}` : previewUrl}
               className="h-full w-full rounded-2xl border border-black/5 bg-white shadow-card"
               title={activeDoc.filename}
             />
@@ -269,6 +270,7 @@ export default function ChatPage() {
   const [input, setInput]                   = useState("");
   const [sidebarOpen, setSidebarOpen]       = useState(true);
   const [viewerOpen, setViewerOpen]         = useState(false);
+  const [isStreaming, setIsStreaming]       = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
 
@@ -276,6 +278,20 @@ export default function ChatPage() {
   const { data: conversations } = useQuery({ queryKey: ["conversations"], queryFn: listConversations });
   const readyDocs = documents?.filter((d) => d.status === "ready") ?? [];
   const activeDoc = readyDocs.find((d) => d.id === documentId);
+  const [viewerTargetPage, setViewerTargetPage] = useState<number | null>(null);
+  const [customViewerDoc, setCustomViewerDoc]   = useState<{ id: string; filename: string } | null>(null);
+
+  const handleOpenCitation = (citation: Citation) => {
+    const targetDoc = citation.document_id
+      ? readyDocs.find((d) => d.id === citation.document_id) || { id: citation.document_id, filename: citation.filename }
+      : activeDoc ?? { id: "", filename: citation.filename };
+
+    if (targetDoc && targetDoc.id) {
+      setCustomViewerDoc({ id: targetDoc.id, filename: citation.filename });
+      setViewerTargetPage(citation.page ?? 1);
+      setViewerOpen(true);
+    }
+  };
 
   /* Load conversation on URL param change */
   useEffect(() => {
@@ -353,11 +369,89 @@ export default function ChatPage() {
     },
   });
 
-  const handleSend = (text?: string) => {
+  const handleSend = async (text?: string) => {
     const q = (text ?? input).trim();
-    if (!q || askMutation.isPending) return;
+    if (!q || isStreaming || askMutation.isPending) return;
+
     setInput("");
-    askMutation.mutate(q);
+    const userMsgId = `user-${Date.now()}`;
+    const assistantMsgId = `assistant-${Date.now()}`;
+
+    const userMsg: ChatMessage = {
+      id: userMsgId,
+      role: "user",
+      content: q,
+      citations: null,
+      created_at: new Date().toISOString(),
+    };
+
+    const assistantPlaceholder: ChatMessage = {
+      id: assistantMsgId,
+      role: "assistant",
+      content: "",
+      citations: null,
+      created_at: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, userMsg, assistantPlaceholder]);
+    setIsStreaming(true);
+
+    try {
+      await askQuestionStream(
+        { question: q, documentId, conversationId },
+        {
+          onMetadata: ({ conversation_id }) => {
+            setConversationId(conversation_id);
+            if (convIdParam !== conversation_id) {
+              setSearchParams((p) => {
+                const next = new URLSearchParams(p);
+                next.set("conversationId", conversation_id);
+                if (documentId) next.set("documentId", documentId);
+                return next;
+              });
+            }
+          },
+          onCitations: (citations) => {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === assistantMsgId ? { ...m, citations } : m))
+            );
+          },
+          onToken: (token) => {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId ? { ...m, content: m.content + token } : m
+              )
+            );
+          },
+          onDone: () => {
+            setIsStreaming(false);
+            queryClient.invalidateQueries({ queryKey: ["conversations"] });
+            queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+          },
+          onError: (err) => {
+            setIsStreaming(false);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId
+                  ? { ...m, content: err.message || "Failed to generate response." }
+                  : m
+              )
+            );
+            queryClient.invalidateQueries({ queryKey: ["conversations"] });
+          },
+        }
+      );
+    } catch (err: any) {
+      setIsStreaming(false);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId
+            ? { ...m, content: err?.message || "Failed to reach AI response service." }
+            : m
+        )
+      );
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -499,10 +593,14 @@ export default function ChatPage() {
           )}
 
           {messages.map((m) => (
-            <ChatBubble key={m.id} message={m} />
+            <ChatBubble
+              key={m.id}
+              message={m}
+              onOpenCitation={handleOpenCitation}
+            />
           ))}
 
-          {askMutation.isPending && <ThinkingDots />}
+          {(askMutation.isPending || (isStreaming && messages.length > 0 && !messages[messages.length - 1].content)) && <ThinkingDots />}
           <div ref={bottomRef} />
         </div>
 
@@ -527,7 +625,7 @@ export default function ChatPage() {
             <button
               id="chat-send-btn"
               type="submit"
-              disabled={askMutation.isPending || !input.trim()}
+              disabled={isStreaming || askMutation.isPending || !input.trim()}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-white shadow transition hover:bg-accentDark hover:shadow-glow disabled:cursor-not-allowed disabled:opacity-40"
               title="Send (Enter)"
             >
@@ -545,8 +643,13 @@ export default function ChatPage() {
       {/* Document Viewer Modal */}
       <DocumentViewerModal
         isOpen={viewerOpen}
-        onClose={() => setViewerOpen(false)}
-        activeDoc={activeDoc ?? null}
+        onClose={() => {
+          setViewerOpen(false);
+          setViewerTargetPage(null);
+          setCustomViewerDoc(null);
+        }}
+        activeDoc={customViewerDoc ?? activeDoc ?? null}
+        targetPage={viewerTargetPage}
       />
     </div>
   );

@@ -1,8 +1,14 @@
 """
-DocuMind AI - Knowledge Graph Multi-Hop Query Example
+DocuMind AI - Knowledge Graph Multi-Hop Query Demo
 Demonstrates extracting entities & relations from system documentation,
 building a NetworkX directed graph, and resolving multi-hop dependency queries.
 """
+import sys
+import os
+
+backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
 
 from app.services.knowledge_graph import (
     DocumentKnowledgeGraph,

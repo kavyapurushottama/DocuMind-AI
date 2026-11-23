@@ -219,6 +219,17 @@ def answer_question(
         return answer, []
 
     context = _build_context_block(chunks)
+
+    # Augment context with Knowledge Graph relationships for multi-hop queries
+    try:
+        from app.services.knowledge_graph import get_user_graph
+        user_kg = get_user_graph(user_id)
+        kg_context = user_kg.generate_graph_context_for_rag(question)
+        if kg_context:
+            context = f"{context}\n\n{kg_context}"
+    except Exception as e:
+        logger.debug("Knowledge Graph retrieval notice: %s", e)
+
     answer = generate_answer(question, context, chat_history=chat_history, system_prompt=SYSTEM_PROMPT)
 
     citations = [
@@ -228,6 +239,7 @@ def answer_question(
             chunk_id=c["chunk_id"],
             snippet=(c["text"][:220] + "...") if len(c["text"]) > 220 else c["text"],
             score=round(c["score"], 4),
+            document_id=c.get("document_id"),
         )
         for c in chunks
     ]
@@ -356,6 +368,17 @@ def stream_answer_question(
         return [], token_stream
 
     context = _build_context_block(chunks)
+
+    # Augment context with Knowledge Graph relationships for multi-hop queries
+    try:
+        from app.services.knowledge_graph import get_user_graph
+        user_kg = get_user_graph(user_id)
+        kg_context = user_kg.generate_graph_context_for_rag(question)
+        if kg_context:
+            context = f"{context}\n\n{kg_context}"
+    except Exception as e:
+        logger.debug("Knowledge Graph retrieval notice: %s", e)
+
     citations = [
         Citation(
             filename=c["filename"],
@@ -363,6 +386,7 @@ def stream_answer_question(
             chunk_id=c["chunk_id"],
             snippet=(c["text"][:220] + "...") if len(c["text"]) > 220 else c["text"],
             score=round(c["score"], 4),
+            document_id=c.get("document_id"),
         )
         for c in chunks
     ]

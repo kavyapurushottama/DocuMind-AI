@@ -32,6 +32,7 @@ export interface Citation {
   chunk_id: string;
   snippet: string;
   score: number;
+  document_id?: string | null;
 }
 
 export type MessageRole = "user" | "assistant";

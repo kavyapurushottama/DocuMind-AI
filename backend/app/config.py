@@ -7,8 +7,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    ENVIRONMENT: str = "development"  # "development" or "production"
     # --- Databases / infra ---
-    DATABASE_URL: str = "postgresql://docmind:localdevpass@localhost:5432/docmind"
+    DATABASE_URL: str = "sqlite:///./docmind.db"
     REDIS_URL: str = "redis://localhost:6379"
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_API_KEY: str = ""
@@ -33,7 +34,7 @@ class Settings(BaseSettings):
     OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
 
     # --- Uploads ---
-    MAX_UPLOAD_MB: int = 25
+    MAX_UPLOAD_MB: int = 10
     UPLOAD_DIR: str = "./uploads"
 
     # --- CORS ---
