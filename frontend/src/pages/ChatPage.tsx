@@ -7,7 +7,7 @@ import { apiClient } from "../api/client";
 // @ts-ignore
 import { renderAsync } from "docx-preview";
 import ChatBubble from "../components/ChatBubble";
-import { ChatMessage, ConversationSummary } from "../types";
+import { ChatMessage, Citation, ConversationSummary } from "../types";
 
 const QUICK_ACTIONS = [
   { label: "Summarize this document",       emoji: "📝" },
