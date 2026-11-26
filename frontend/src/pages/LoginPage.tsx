@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { apiClient } from "../api/client";
+import { resetPassword } from "../api/auth";
 
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (
@@ -65,6 +66,52 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("Logging in...");
+
+  // Forgot password modal state
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotPassword, setForgotPassword] = useState("");
+  const [forgotConfirm, setForgotConfirm] = useState("");
+  const [showForgotPass, setShowForgotPass] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState("");
+  const [forgotSuccess, setForgotSuccess] = useState("");
+
+  const handleOpenForgot = () => {
+    setForgotEmail(email);
+    setForgotPassword("");
+    setForgotConfirm("");
+    setForgotError("");
+    setForgotSuccess("");
+    setShowForgotModal(true);
+  };
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError("");
+    setForgotSuccess("");
+
+    if (forgotPassword.length < 6) {
+      setForgotError("Password must be at least 6 characters.");
+      return;
+    }
+    if (forgotPassword !== forgotConfirm) {
+      setForgotError("Passwords do not match.");
+      return;
+    }
+
+    setForgotLoading(true);
+    try {
+      const res = await resetPassword(forgotEmail, forgotPassword);
+      setForgotSuccess(res.message || "Password reset successful! You can now log in.");
+      setPassword(forgotPassword);
+      setEmail(forgotEmail);
+    } catch (err: any) {
+      setForgotError(err?.response?.data?.detail || "Failed to reset password. Please verify the email address.");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
 
   useEffect(() => {
     // Silent wake-up ping to Render backend when user opens login page
@@ -140,9 +187,18 @@ export default function LoginPage() {
 
             {/* Password */}
             <div>
-              <label htmlFor="login-password" className="mb-1.5 block text-xs font-semibold text-t2 uppercase tracking-wide">
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label htmlFor="login-password" className="block text-xs font-semibold text-t2 uppercase tracking-wide">
+                  Password
+                </label>
+                <button
+                  type="button"
+                  onClick={handleOpenForgot}
+                  className="text-xs font-medium text-accent hover:text-accentDark transition"
+                >
+                  Forgot password?
+                </button>
+              </div>
               <div className="relative">
                 <input
                   id="login-password"
@@ -202,6 +258,123 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      {showForgotModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-black/5 animate-scale-up">
+            <div className="flex items-center justify-between pb-3 border-b border-t5">
+              <h3 className="font-display text-lg font-bold text-ink">Reset Password</h3>
+              <button
+                type="button"
+                onClick={() => setShowForgotModal(false)}
+                className="rounded-lg p-1 text-t3 hover:bg-surface hover:text-ink transition"
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
+            </div>
+
+            {forgotSuccess ? (
+              <div className="mt-4 space-y-4">
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-50 p-4 text-sm text-emerald-800">
+                  <div className="flex items-center gap-2 font-semibold text-emerald-900 mb-1">
+                    ✓ Success
+                  </div>
+                  {forgotSuccess}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotModal(false)}
+                  className="w-full rounded-xl bg-accent py-2.5 text-sm font-semibold text-white transition hover:bg-accentDark shadow-sm"
+                >
+                  Back to Login
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotSubmit} className="mt-4 space-y-4">
+                <p className="text-xs text-t3 leading-relaxed">
+                  Enter your registered account email and set a new password.
+                </p>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-t2 uppercase tracking-wide">
+                    Account Email
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full rounded-xl border border-t4 bg-white px-4 py-2 text-sm text-ink placeholder-t4 transition hover:border-accent/40 focus:border-accent focus:ring-0"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-t2 uppercase tracking-wide">
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showForgotPass ? "text" : "password"}
+                      required
+                      value={forgotPassword}
+                      onChange={(e) => setForgotPassword(e.target.value)}
+                      placeholder="Minimum 6 characters"
+                      className="w-full rounded-xl border border-t4 bg-white px-4 py-2 pr-10 text-sm text-ink placeholder-t4 transition hover:border-accent/40 focus:border-accent focus:ring-0"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotPass((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-t3 hover:text-accent transition"
+                    >
+                      <EyeIcon open={showForgotPass} />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-t2 uppercase tracking-wide">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type={showForgotPass ? "text" : "password"}
+                    required
+                    value={forgotConfirm}
+                    onChange={(e) => setForgotConfirm(e.target.value)}
+                    placeholder="Repeat new password"
+                    className="w-full rounded-xl border border-t4 bg-white px-4 py-2 text-sm text-ink placeholder-t4 transition hover:border-accent/40 focus:border-accent focus:ring-0"
+                  />
+                </div>
+
+                {forgotError && (
+                  <div className="rounded-xl border border-danger/20 bg-red-50 p-3 text-xs text-danger">
+                    {forgotError}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotModal(false)}
+                    className="rounded-xl px-4 py-2 text-sm font-medium text-t2 hover:bg-surface transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={forgotLoading}
+                    className="rounded-xl bg-accent px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-accentDark disabled:opacity-60"
+                  >
+                    {forgotLoading ? "Resetting..." : "Reset Password"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -25,3 +25,11 @@ export async function getMe() {
   const { data } = await apiClient.get("/api/auth/me");
   return data as User;
 }
+
+export async function resetPassword(email: string, newPassword: string): Promise<{ message: string }> {
+  const { data } = await apiClient.post("/api/auth/reset-password", {
+    email,
+    new_password: newPassword,
+  });
+  return data;
+}

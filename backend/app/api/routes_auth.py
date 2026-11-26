@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas.auth import SignupRequest, TokenResponse, UserResponse
+from app.schemas.auth import SignupRequest, TokenResponse, UserResponse, ResetPasswordRequest
 from app.services import auth_service
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -33,6 +33,15 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         )
     token = auth_service.issue_token(user)
     return TokenResponse(access_token=token)
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
+    try:
+        auth_service.reset_password(db, data.email, data.new_password)
+        return {"message": "Password successfully reset. You can now log in."}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/me", response_model=UserResponse)
