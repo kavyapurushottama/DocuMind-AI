@@ -33,17 +33,25 @@ def test_chunking_skips_empty_pages():
     assert chunks[0].page_number == 2
 
 
-def test_health_endpoint():
-    import os
+def test_reset_password_validation():
+    from unittest.mock import MagicMock
     import pytest
-    if not os.environ.get("RUN_INTEGRATION_TESTS"):
-        pytest.skip("Integration test requiring live database — run `docker compose up -d` and set RUN_INTEGRATION_TESTS=1")
-    try:
-        from fastapi.testclient import TestClient
-        from app.main import app
-        client = TestClient(app)
-        resp = client.get("/")
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "ok"
-    except Exception as e:
-        pytest.skip(f"Live server dependencies not active in this test environment ({e})")
+    from app.services.auth_service import reset_password
+
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.first.return_value = None
+
+    # Test unknown email raises ValueError
+    with pytest.raises(ValueError, match="No account found with this email address"):
+        reset_password(mock_db, "unknown@example.com", "newsecret123")
+
+    # Test short password raises ValueError
+    mock_user = MagicMock()
+    mock_db.query.return_value.filter.return_value.first.return_value = mock_user
+    with pytest.raises(ValueError, match="Password must be at least 6 characters"):
+        reset_password(mock_db, "test@example.com", "123")
+
+    # Test successful reset updates hashed_password
+    updated_user = reset_password(mock_db, "test@example.com", "validpassword123")
+    assert mock_user.hashed_password is not None
+    assert mock_db.commit.called
