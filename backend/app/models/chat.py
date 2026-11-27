@@ -20,7 +20,7 @@ class Conversation(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     # nullable: null means "chat across all documents"
-    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
     workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True)
     title = Column(String, default="New chat")
     is_pinned = Column(Boolean, default=False, nullable=False)

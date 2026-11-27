@@ -28,7 +28,7 @@ export async function askQuestionStream(
     onError?: (err: Error) => void;
   }
 ): Promise<void> {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("docmind_token") || localStorage.getItem("token");
   // Default to window.location.origin or configured API url
   const apiBase = import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:8000");
   const url = `${apiBase.replace(/\/+$/, "")}/api/chat/ask/stream`;

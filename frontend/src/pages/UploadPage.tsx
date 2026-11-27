@@ -36,6 +36,9 @@ export default function UploadPage() {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
+    onError: (err: any) => {
+      setError(err?.response?.data?.detail || "Failed to delete document. Please try again.");
+    },
   });
 
   const handleUpload = (file: File) => {

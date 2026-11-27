@@ -383,24 +383,38 @@ def delete_document(document_id: uuid.UUID, db: Session = Depends(get_db), curre
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
+    # 1. Detach or nullify conversations referencing this document
+    from app.models.chat import Conversation
+    db.query(Conversation).filter(Conversation.document_id == doc.id).update(
+        {Conversation.document_id: None},
+        synchronize_session=False,
+    )
+
+    # 2. Delete vectors from Qdrant with resilient fallback
     try:
         vector_store.delete_document_chunks(
             str(doc.id),
             str(current_user.id),
         )
     except Exception as e:
-        logger.exception("Failed to delete Qdrant chunks for document %s", document_id)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Document deletion is temporarily unavailable. Please retry.",
-        ) from e
+        logger.warning(
+            "Notice: failed to delete Qdrant chunks for document %s (continuing database cleanup): %s",
+            document_id,
+            e,
+        )
 
+    # 3. Clean up physical file if it exists
     storage = get_storage_service()
     if doc.file_path and storage.exists(doc.file_path):
-        storage.delete(doc.file_path)
+        try:
+            storage.delete(doc.file_path)
+        except Exception as e:
+            logger.warning("Failed to delete local disk file %s: %s", doc.file_path, e)
 
+    # 4. Delete document record (cascades to DocumentFile, DocumentEntity, DocumentRelationship)
     db.delete(doc)
     db.commit()
+
     from app.services.knowledge_graph import invalidate_user_graph_cache
     invalidate_user_graph_cache(str(current_user.id))
 

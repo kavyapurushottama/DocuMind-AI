@@ -120,6 +120,9 @@ export default function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
+    onError: (err: any) => {
+      alert(err?.response?.data?.detail || "Failed to delete document. Please try again.");
+    },
   });
 
   const deleteChatMutation = useMutation({
